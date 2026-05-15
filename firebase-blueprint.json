@@ -1,0 +1,82 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information and status",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["customer", "driver"] },
+        "status": { "type": "string", "enum": ["online", "offline"] },
+        "location": {
+          "type": "object",
+          "properties": {
+            "lat": { "type": "number" },
+            "lng": { "type": "number" }
+          }
+        },
+        "lastActive": { "type": "string", "format": "date-time" },
+        "phone": { "type": "string" }
+      },
+      "required": ["uid", "role"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Fuel delivery order",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string" },
+        "driverId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "delivering", "completed", "cancelled"] },
+        "fuelType": { "type": "string" },
+        "amount": { "type": "number" },
+        "location": {
+          "type": "object",
+          "properties": {
+            "lat": { "type": "number" },
+            "lng": { "type": "number" },
+            "address": { "type": "string" }
+          }
+        },
+        "price": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["customerId", "status", "fuelType", "location"]
+    },
+    "SOSAlert": {
+      "title": "SOS Alert",
+      "description": "Emergency SOS signal",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "location": {
+          "type": "object",
+          "properties": {
+            "lat": { "type": "number" },
+            "lng": { "type": "number" }
+          }
+        },
+        "status": { "type": "string", "enum": ["active", "resolved"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "location", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users": {
+        "schema": "User",
+        "description": "Global users collection"
+    },
+    "orders": {
+        "schema": "Order",
+        "description": "All fuel delivery orders"
+    },
+    "sos_alerts": {
+        "schema": "SOSAlert",
+        "description": "Emergency SOS alerts"
+    }
+  }
+}
