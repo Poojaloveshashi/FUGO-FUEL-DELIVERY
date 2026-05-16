@@ -14,10 +14,10 @@ import { setupRecaptcha, signInWithPhone } from '../services/store';
 import { ConfirmationResult } from 'firebase/auth';
 
 interface LoginProps {
-  onGuestLogin: () => void;
+  onSuccess: () => void;
 }
 
-export default function Login({ onGuestLogin }: LoginProps) {
+export default function Login({ onSuccess }: LoginProps) {
   const [phoneNumber, setPhoneNumber] = useState('91');
   const [otp, setOtp] = useState('');
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
@@ -46,10 +46,11 @@ export default function Login({ onGuestLogin }: LoginProps) {
     setError(null);
     setLoading(true);
 
-    // Simulate decryption/verification delay
+    // This simulation currently allows proceeding. 
+    // In a production app, verify real OTP here.
     setTimeout(() => {
       if (otp === '123456' || otp === '000000') {
-        onGuestLogin(); // Using guest login to bypass real auth for now
+        onSuccess(); 
       } else {
         setError('Decryption failed. Invalid protocol code.');
         setLoading(false);
@@ -187,12 +188,6 @@ export default function Login({ onGuestLogin }: LoginProps) {
         </div>
 
         <div className="mt-12 text-center space-y-4">
-            <button 
-                onClick={onGuestLogin}
-                className="text-white/40 hover:text-gold-500 transition-colors text-[10px] font-bold uppercase tracking-[0.3em] italic"
-            >
-                Proceed via Guest Protocol
-            </button>
             <p className="text-gray-600 text-[9px] font-bold uppercase tracking-widest">SECURE TRANSIT PORTAL v1.0 • FUGO PROTOCOL</p>
         </div>
       </motion.div>

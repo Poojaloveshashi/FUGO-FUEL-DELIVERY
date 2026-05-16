@@ -8,7 +8,11 @@ import {
   Wallet, 
   LogOut, 
   Power,
-  ShieldAlert
+  ShieldAlert,
+  Calendar,
+  PlayCircle,
+  Gift,
+  Home
 } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import { UserStatus } from '../types';
@@ -18,7 +22,7 @@ import { cn } from '../lib/utils';
 
 interface LayoutProps {
   children: React.ReactNode;
-  activeTab?: 'map' | 'profile' | 'earnings' | 'sos';
+  activeTab?: 'map' | 'profile' | 'earnings' | 'sos' | 'training' | 'referrals';
   setActiveTab?: (tab: any) => void;
   userStatus?: UserStatus;
   userName?: string;
@@ -61,26 +65,20 @@ export default function Layout({
         <TabButton 
           active={activeTab === 'map'} 
           onClick={() => setActiveTab?.('map')}
-          icon={<MapIcon size={24} />}
+          icon={<Home size={24} />}
           label="Home"
         />
         <TabButton 
           active={activeTab === 'earnings'} 
           onClick={() => setActiveTab?.('earnings')}
-          icon={<Wallet size={24} />}
-          label="Earnings"
-        />
-        <TabButton 
-          active={activeTab === 'sos'} 
-          onClick={() => setActiveTab?.('sos')}
-          icon={<ShieldAlert size={24} className={activeTab === 'sos' ? 'text-red-500' : ''} />}
-          label="SOS"
+          icon={<Calendar size={24} />}
+          label="Slots"
         />
         <TabButton 
           active={activeTab === 'profile'} 
           onClick={() => setActiveTab?.('profile')}
           icon={<User size={24} />}
-          label="Account"
+          label="Profile"
         />
       </nav>
     </div>

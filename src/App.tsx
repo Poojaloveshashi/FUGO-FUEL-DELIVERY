@@ -16,7 +16,10 @@ import {
   ShieldAlert, 
   AlertTriangle,
   User,
-  ArrowRight
+  ArrowRight,
+  PlayCircle,
+  Gift,
+  Check
 } from 'lucide-react';
 import { createSOS, createProfile } from './services/store';
 
@@ -26,9 +29,6 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [authChecked, setAuthChecked] = useState(false);
   const [activeTab, setActiveTab] = useState<'map' | 'profile' | 'earnings' | 'sos'>('map');
-  const [guestRole, setGuestRole] = useState<UserRole>(UserRole.DRIVER);
-  const [guestStatus, setGuestStatus] = useState<UserStatus>(UserStatus.ONLINE);
-  const [guestMode, setGuestMode] = useState(false);
   const [showPermissions, setShowPermissions] = useState(false);
   const [permissionGranted, setPermissionGranted] = useState(false);
 
@@ -38,14 +38,12 @@ export default function App() {
       setAuthChecked(true);
       if (!u) {
         setProfile(null);
-        if (!guestMode) {
-           setLoading(false);
-        }
+        setLoading(false);
       }
     });
 
     return () => unsubAuth();
-  }, [guestMode]);
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -61,67 +59,41 @@ export default function App() {
     return <Splash />;
   }
 
-  // Not logged in and not in guest mode -> Show Login
-  if (!user && !guestMode) {
-    return <Login onGuestLogin={() => {
-        setGuestMode(true);
-        setShowPermissions(true);
+  // Not logged in -> Show Login
+  if (!user) {
+    return <Login onSuccess={() => {
+        // Since we are no longer using guest mode, this would ideally trigger 
+        // a real state refresh if using context or similar.
+        // For now, onAuthStateChanged in App.tsx will handle the state update 
+        // if real Firebase Auth was being used.
     }} />;
   }
 
-  // Show Permissions Screen if needed (Guest or New User)
+  // Show Permissions Screen if needed
   if (showPermissions && !permissionGranted) {
     return <Permissions onProceed={() => setPermissionGranted(true)} />;
   }
 
   // Logged in but profile still loading
-  if (user && loading && !profile) {
+  if (loading && !profile) {
     return <Splash />;
   }
 
   // Logged in but no profile (and loading finished) -> Show Onboarding
-  if (user && !profile && !guestMode) {
+  if (!profile) {
      return <Onboarding user={user} onComplete={() => setLoading(true)} />;
   }
-
-  const activeProfile: UserProfile = profile || {
-    uid: 'guest-id',
-    displayName: 'Guest Elite User',
-    role: guestRole,
-    status: guestStatus,
-    location: { lat: 37.422, lng: -122.084, address: "Palm Drive, Palo Alto" }
-  };
-
-  const handleRoleToggle = () => {
-    if (!profile) {
-      setGuestRole(prev => prev === UserRole.CUSTOMER ? UserRole.DRIVER : UserRole.CUSTOMER);
-      setActiveTab('map');
-    }
-  };
-
-  const handleStatusToggle = () => {
-    if (!profile) {
-      setGuestStatus(prev => prev === UserStatus.ONLINE ? UserStatus.OFFLINE : UserStatus.ONLINE);
-    }
-  };
 
   return (
     <Layout 
       activeTab={activeTab} 
       setActiveTab={setActiveTab}
-      userStatus={activeProfile.status}
-      userName={activeProfile.displayName}
-      onStatusToggle={handleStatusToggle}
+      userStatus={profile.status}
+      userName={profile.displayName}
     >
-      {!profile && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[60] bg-gold-500 text-black px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 shadow-2xl border-2 border-black cursor-pointer hover:bg-gold-400" onClick={handleRoleToggle}>
-          <span>Demo Mode: {guestRole}</span>
-          <span className="bg-black/10 px-2 py-0.5 rounded-full">Switch</span>
-        </div>
-      )}
-      {activeTab === 'map' && <Dashboard profile={activeProfile} />}
-      {activeTab === 'profile' && <ProfilePage profile={activeProfile} />}
-      {activeTab === 'earnings' && <EarningsPage profile={activeProfile} />}
+      {activeTab === 'map' && <Dashboard profile={profile} />}
+      {activeTab === 'profile' && <ProfilePage profile={profile} />}
+      {activeTab === 'earnings' && <EarningsPage profile={profile} />}
       {activeTab === 'sos' && (
         <div className="flex flex-col items-center justify-center h-full p-8 text-center space-y-12 bg-black">
            <motion.div 
@@ -147,10 +119,8 @@ export default function App() {
            <button 
               onClick={async () => {
                 try {
-                  if (activeProfile.uid === 'guest-id') {
-                    alert("DEMO MODE: SOS PROTOCOL BROADCASTING");
-                  } else if (activeProfile.location) {
-                    await createSOS(activeProfile.location);
+                  if (profile.location) {
+                    await createSOS(profile.location);
                     alert("SOS SIGNAL TRANSMITTED. ELITE UNITS NOTIFIED.");
                   } else {
                     alert("LOCATION NOT AVAILABLE. CHECK PERMISSIONS.");

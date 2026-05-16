@@ -80,6 +80,7 @@ export default function Dashboard({ profile }: DashboardProps) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [driverLocation, setDriverLocation] = useState<Location | null>(null);
   const [showSlotBooking, setShowSlotBooking] = useState(false);
+  const [hasBookedSlot, setHasBookedSlot] = useState(false);
   const [bannerIndex, setBannerIndex] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState('All');
 
@@ -87,19 +88,15 @@ export default function Dashboard({ profile }: DashboardProps) {
   useEffect(() => {
     if (profile.role === UserRole.DRIVER && profile.status === UserStatus.ONLINE) {
       const interval = setInterval(() => {
-        const newLat = (profile.location?.lat || 37.42) + (Math.random() - 0.5) * 0.001;
-        const newLng = (profile.location?.lng || -122.08) + (Math.random() - 0.5) * 0.001;
-        const newLoc = { lat: newLat, lng: newLng, address: profile.location?.address };
+        const newLat = (profile.location?.lat || 17.3850) + (Math.random() - 0.5) * 0.001;
+        const newLng = (profile.location?.lng || 78.4867) + (Math.random() - 0.5) * 0.001;
+        const newLoc = { lat: newLat, lng: newLng, address: profile.location?.address || 'Hyderabad, Telangana' };
         
-        if (profile.uid !== 'guest-id') {
-          updateProfileLocation(newLoc);
-        } else {
-          setDriverLocation(newLoc);
-        }
+        updateProfileLocation(newLoc);
       }, 5000);
       return () => clearInterval(interval);
     }
-  }, [profile.role, profile.status, profile.uid, profile.location]);
+  }, [profile.role, profile.status, profile.location]);
 
   // Banner rotation
   useEffect(() => {
@@ -110,38 +107,6 @@ export default function Dashboard({ profile }: DashboardProps) {
   }, []);
 
   useEffect(() => {
-    if (profile.uid === 'guest-id') {
-      const mockOrders: Order[] = [
-        {
-          id: 'mock-1',
-          customerId: 'customer-alpha',
-          driverId: null,
-          fuelType: 'Standard Repair',
-          amount: 1,
-          location: { lat: 37.428, lng: -122.09, address: "Googleplex, Mountain View" },
-          status: OrderStatus.PENDING,
-          price: isIndia ? 5250 : 67.50,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }
-      ];
-
-      const mockSOS: SOSAlert[] = [
-        {
-          id: 'sos-1',
-          userId: 'user-beta',
-          location: { lat: 37.42, lng: -122.08, address: "Highway 101" },
-          status: 'active',
-          createdAt: new Date().toISOString()
-        }
-      ];
-
-      setAvailableJobs(mockOrders.filter(o => o.status === OrderStatus.PENDING));
-      setMyOrders([]);
-      setSosAlerts(mockSOS);
-      return;
-    }
-
     let unsubs: (() => void)[] = [];
     unsubs.push(subscribeToSOS(setSosAlerts));
 
@@ -157,26 +122,12 @@ export default function Dashboard({ profile }: DashboardProps) {
 
   const handleToggleStatus = async () => {
     const newStatus = profile.status === UserStatus.ONLINE ? UserStatus.OFFLINE : UserStatus.ONLINE;
-    if (profile.uid !== 'guest-id') {
-      await updateProfileStatus(newStatus);
-    } else {
-      setSuccessMessage(`STATUS UPDATED TO ${newStatus}`);
-      setTimeout(() => setSuccessMessage(null), 3000);
-    }
+    await updateProfileStatus(newStatus);
   };
 
   const handleAcceptJob = async (orderId: string) => {
     try {
-      if (profile.uid === 'guest-id') {
-        const job = availableJobs.find(j => j.id === orderId);
-        if (job) {
-          const acceptedJob = { ...job, status: OrderStatus.ACCEPTED, driverId: profile.uid };
-          setAvailableJobs(prev => prev.filter(j => j.id !== orderId));
-          setMyOrders(prev => [...prev, acceptedJob]);
-        }
-      } else {
-        await acceptOrder(orderId);
-      }
+      await acceptOrder(orderId);
       setSuccessMessage("TASK ACCEPTED. STARTING TRANSIT.");
       setTimeout(() => setSuccessMessage(null), 4000);
     } catch (error) {
@@ -185,11 +136,7 @@ export default function Dashboard({ profile }: DashboardProps) {
   };
 
   const updateOrderDeliveryStatus = async (orderId: string, status: OrderStatus) => {
-    if (profile.uid === 'guest-id') {
-      setMyOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
-    } else {
-      await updateOrderStatus(orderId, status);
-    }
+    await updateOrderStatus(orderId, status);
     setSuccessMessage(`STATUS: ${status.toUpperCase()}`);
     setTimeout(() => setSuccessMessage(null), 3000);
   };
@@ -204,10 +151,10 @@ export default function Dashboard({ profile }: DashboardProps) {
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-gold-600 rounded-xl flex items-center justify-center text-black font-display font-bold italic rotate-3 shadow-lg">F</div>
           <div>
-            <h1 className="text-gray-900 font-bold text-lg leading-tight uppercase tracking-tight">Fugo Repair</h1>
+            <h1 className="text-gray-900 font-bold text-lg leading-tight uppercase tracking-tight">HYD-NALLAGANDLA NEW</h1>
             <div className="flex items-center gap-1.5 text-gray-400 text-[10px] font-bold uppercase tracking-wider">
               <MapPin size={10} className="text-gold-500" />
-              <span className="truncate max-w-[120px]">{profile.location?.address || 'Detecting Node...'}</span>
+              <span className="truncate max-w-[200px]">{profile.location?.address || 'Hyderabad, Telangana'}</span>
             </div>
           </div>
         </div>
@@ -241,6 +188,21 @@ export default function Dashboard({ profile }: DashboardProps) {
         {profile.role === UserRole.DRIVER ? (
           /* TECHNICIAN DASHBOARD */
           <div className="space-y-8 max-w-lg mx-auto">
+            {hasBookedSlot && (
+              <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm flex items-center gap-4">
+                 <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-gray-400">
+                    <Clock size={24} />
+                 </div>
+                 <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                       <p className="text-sm font-bold text-gray-900 uppercase">05:01 PM - 07:00 PM</p>
+                       <span className="bg-purple-100 text-purple-600 text-[8px] font-bold px-2 py-0.5 rounded-full">Upcoming</span>
+                    </div>
+                    <p className="text-[10px] text-gray-400 font-medium">Reach your node before shift start time</p>
+                 </div>
+              </div>
+            )}
+
             {profile.status === UserStatus.OFFLINE ? (
               <div className="space-y-6">
                 <div className="bg-emerald-600 p-8 rounded-[40px] text-white shadow-2xl relative overflow-hidden">
@@ -249,12 +211,12 @@ export default function Dashboard({ profile }: DashboardProps) {
                   </div>
                   <div className="relative z-10">
                     <h2 className="text-3xl font-display font-bold italic tracking-tighter uppercase mb-2">High Earning Shift Live!</h2>
-                    <p className="text-emerald-100/70 text-sm font-medium mb-8">Technicians in your area are earning 2.5x more right now.</p>
+                    <p className="text-emerald-100/70 text-sm font-medium mb-8">Repairs in Gachibowli are 2.5x more right now.</p>
                     <button 
                       onClick={() => setShowSlotBooking(true)}
                       className="bg-white text-emerald-600 font-bold px-8 py-4 rounded-2xl flex items-center gap-2 hover:bg-emerald-50 transition-all uppercase tracking-widest text-xs"
                     >
-                      Book & Go Online <ArrowRight size={16} />
+                      Book Slots & Earn <ArrowRight size={16} />
                     </button>
                   </div>
                 </div>
@@ -263,10 +225,14 @@ export default function Dashboard({ profile }: DashboardProps) {
                   {[
                     { icon: <Wallet className="text-gold-600" />, label: 'Earnings', val: `${currencySymbol}12,500` },
                     { icon: <Zap className="text-gold-600" />, label: 'Incentives', val: `${currencySymbol}1,250` },
-                    { icon: <Calendar className="text-gold-600" />, label: 'My Shifts', val: '2 Booked' },
-                    { icon: <Gift className="text-gold-600" />, label: 'Referrals', val: 'New' },
+                    { icon: <Calendar className="text-gold-600" />, label: 'Slots', val: hasBookedSlot ? '1 Reserved' : 'None Booked' },
+                    { icon: <Gift className="text-gold-600" />, label: 'Joining Bonus', val: `${currencySymbol}1000` },
                   ].map((item, i) => (
-                    <div key={i} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center justify-center gap-3 text-center">
+                    <div 
+                      key={i} 
+                      onClick={() => i === 2 && setShowSlotBooking(true)}
+                      className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center justify-center gap-3 text-center cursor-pointer active:scale-95 transition-all"
+                    >
                       <div className="w-10 h-10 bg-gold-50 rounded-xl flex items-center justify-center">{item.icon}</div>
                       <div>
                         <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-none mb-1">{item.label}</p>
@@ -606,24 +572,10 @@ export default function Dashboard({ profile }: DashboardProps) {
                       const orderId = await createOrder({
                         fuelType: orderForm.fuelType,
                         amount: orderForm.amount,
-                        location: profile.location || { lat: 37.42, lng: -122.08, address: "Current Location" },
+                        location: profile.location || { lat: 17.3850, lng: 78.4867, address: "Hyderabad, Telangana" },
                         price: orderForm.amount * priceMultiplier
                       });
-                      if (orderId || profile.uid === 'guest-id') {
-                        if (profile.uid === 'guest-id') {
-                           setMyOrders(prev => [{
-                             id: `m-${Date.now()}`,
-                             customerId: 'guest-id',
-                             driverId: null,
-                             fuelType: orderForm.fuelType,
-                             amount: orderForm.amount,
-                             location: { lat: 37.42, lng: -122.08, address: "H-Tech Park Node" },
-                             status: OrderStatus.PENDING,
-                             price: orderForm.amount * priceMultiplier,
-                             createdAt: new Date().toISOString(),
-                             updatedAt: new Date().toISOString()
-                           }, ...prev]);
-                        }
+                      if (orderId) {
                         setIsOrdering(false);
                         setSuccessMessage("REPAIR NODE ESTABLISHED");
                         setTimeout(() => setSuccessMessage(null), 3000);
@@ -647,6 +599,7 @@ export default function Dashboard({ profile }: DashboardProps) {
               onClose={() => setShowSlotBooking(false)}
               onBooked={() => {
                 setShowSlotBooking(false);
+                setHasBookedSlot(true);
                 setSuccessMessage("SHIFT RESERVED");
                 setTimeout(() => setSuccessMessage(null), 3000);
               }}

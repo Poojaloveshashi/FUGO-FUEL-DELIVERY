@@ -58,50 +58,6 @@ export default function Earnings({ profile }: EarningsProps) {
   useEffect(() => {
     if (!profile) return;
 
-    if (profile.uid === 'guest-id') {
-      const mockOrders: Order[] = isDriver ? [
-        {
-          id: 'f-101',
-          customerId: 'cust-1',
-          driverId: 'guest-id',
-          status: OrderStatus.COMPLETED,
-          fuelType: 'Standard Repair',
-          amount: 1,
-          location: { lat: 0, lng: 0, address: 'Phoenix Mall, Gachibowli' },
-          price: isIndia ? 2500 : 45.00,
-          createdAt: new Date(Date.now() - 86400000).toISOString(),
-          updatedAt: new Date(Date.now() - 86400000).toISOString()
-        },
-        {
-          id: 'f-102',
-          customerId: 'cust-2',
-          driverId: 'guest-id',
-          status: OrderStatus.COMPLETED,
-          fuelType: 'Maintenance',
-          amount: 2,
-          location: { lat: 0, lng: 0, address: 'Cyber Towers, HITEC City' },
-          price: isIndia ? 4800 : 75.00,
-          createdAt: new Date(Date.now() - 172800000).toISOString(),
-          updatedAt: new Date(Date.now() - 172800000).toISOString()
-        }
-      ] : [
-        {
-          id: 'f-201',
-          customerId: 'guest-id',
-          driverId: 'driver-1',
-          status: OrderStatus.COMPLETED,
-          fuelType: 'Emergency Fix',
-          amount: 1,
-          location: { lat: 0, lng: 0, address: 'DLF Cyber City' },
-          price: isIndia ? 3200 : 55.00,
-          createdAt: new Date(Date.now() - 43200000).toISOString(),
-          updatedAt: new Date(Date.now() - 43200000).toISOString()
-        }
-      ];
-      setOrders(mockOrders);
-      return;
-    }
-
     const unsub = isDriver 
       ? subscribeToDriverOrderHistory(profile.uid, setOrders)
       : subscribeToCustomerOrders(profile.uid, setOrders);
