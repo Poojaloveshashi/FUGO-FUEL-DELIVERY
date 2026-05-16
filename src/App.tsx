@@ -12,7 +12,7 @@ import Permissions from './pages/Permissions';
 import EarningsPage from './pages/Earnings';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  Fuel, 
+  Wrench, 
   ShieldAlert, 
   AlertTriangle,
   User,
@@ -183,14 +183,14 @@ function Splash() {
         transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
         className="w-24 h-24 bg-gold-500 rounded-3xl flex items-center justify-center shadow-2xl shadow-gold-500/40 mb-8"
       >
-        <Fuel size={48} className="text-black" />
+        <Wrench size={48} className="text-black" />
       </motion.div>
       <motion.h1 
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         className="font-display font-bold text-3xl text-gold-400 italic tracking-[0.2em]"
       >
-        FUGO FUEL
+        FUGO REPAIR
       </motion.h1>
       <div className="mt-8 w-48 h-1 bg-gray-900 rounded-full overflow-hidden">
         <motion.div 

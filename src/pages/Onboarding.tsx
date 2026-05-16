@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { 
-  User, 
   ArrowRight, 
   Briefcase, 
-  Fuel,
+  Wrench,
+  Hammer,
   CheckCircle2,
   Trash2
 } from 'lucide-react';
@@ -58,24 +58,24 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
       >
         <div className="bg-gray-900/60 border border-white/10 backdrop-blur-3xl p-10 rounded-[50px] shadow-2xl relative overflow-hidden">
             <div className="absolute top-0 right-0 p-8 opacity-[0.03]">
-                <Fuel size={200} className="text-white" />
+                <Wrench size={200} className="text-white" />
             </div>
 
             {step === 'info' ? (
                 <div className="space-y-8 relative">
                     <div className="space-y-2 text-center">
                         <div className="w-16 h-16 bg-gold-500 rounded-2xl mx-auto flex items-center justify-center mb-6">
-                            <User size={32} className="text-black" />
+                            <Wrench size={32} className="text-black" />
                         </div>
                         <h2 className="text-white font-display font-bold text-3xl italic tracking-tighter uppercase">Fugo Identifier</h2>
-                        <p className="text-gray-500 text-[10px] uppercase font-bold tracking-[0.3em]">Establish your delivery handle</p>
+                        <p className="text-gray-500 text-[10px] uppercase font-bold tracking-[0.3em]">Establish your service handle</p>
                     </div>
 
                     <div className="space-y-4">
-                        <label className="text-gray-500 text-[9px] uppercase font-bold tracking-widest ml-4 italic">Display Name / Alias</label>
+                        <label className="text-gray-500 text-[9px] uppercase font-bold tracking-widest ml-4 italic">Service Name / Technician Tag</label>
                         <input 
                             type="text"
-                            placeholder="e.g. Commander Smith"
+                            placeholder="e.g. Master Tech"
                             value={displayName}
                             onChange={(e) => setDisplayName(e.target.value)}
                             className="w-full bg-black/50 border border-white/5 rounded-3xl py-6 px-8 text-white focus:outline-none focus:border-gold-500 transition-all font-bold text-lg tracking-tight"
@@ -107,11 +107,11 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
                         >
                             <div className="flex items-center gap-4">
                                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${role === UserRole.CUSTOMER ? 'bg-gold-500 text-black' : 'bg-white/5 text-white/40'}`}>
-                                    <Fuel size={24} />
+                                    <Wrench size={24} />
                                 </div>
                                 <div className="text-left">
-                                    <p className={`font-bold uppercase tracking-tight ${role === UserRole.CUSTOMER ? 'text-white' : 'text-gray-500'}`}>Refueling Commander</p>
-                                    <p className="text-[9px] text-gray-500 uppercase font-bold tracking-widest mt-0.5">I need high-precision fuel delivery</p>
+                                    <p className={`font-bold uppercase tracking-tight ${role === UserRole.CUSTOMER ? 'text-white' : 'text-gray-500'}`}>Service Requester</p>
+                                    <p className="text-[9px] text-gray-500 uppercase font-bold tracking-widest mt-0.5">I need high-precision repair service</p>
                                 </div>
                             </div>
                             {role === UserRole.CUSTOMER && <CheckCircle2 className="text-gold-500" />}
@@ -123,11 +123,11 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
                         >
                             <div className="flex items-center gap-4">
                                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${role === UserRole.DRIVER ? 'bg-gold-500 text-black' : 'bg-white/5 text-white/40'}`}>
-                                    <Briefcase size={24} />
+                                    <Hammer size={24} />
                                 </div>
                                 <div className="text-left">
-                                    <p className={`font-bold uppercase tracking-tight ${role === UserRole.DRIVER ? 'text-white' : 'text-gray-500'}`}>Dispatch Elite</p>
-                                    <p className="text-[9px] text-gray-500 uppercase font-bold tracking-widest mt-0.5">I am here to facilitate delivery logistics</p>
+                                    <p className={`font-bold uppercase tracking-tight ${role === UserRole.DRIVER ? 'text-white' : 'text-gray-500'}`}>Technician Elite</p>
+                                    <p className="text-[9px] text-gray-500 uppercase font-bold tracking-widest mt-0.5">I am here to facilitate on-site repairs</p>
                                 </div>
                             </div>
                             {role === UserRole.DRIVER && <CheckCircle2 className="text-gold-500" />}

@@ -51,8 +51,8 @@ export default function Layout({
             <span className="text-black font-display font-bold text-xl italic tracking-tighter">F</span>
           </div>
           <div>
-            <h1 className="font-display font-bold text-xl text-gold-400 tracking-tight leading-tight">FUGO FUEL</h1>
-            <p className="text-[10px] text-gray-500 tracking-[0.2em] font-medium uppercase -mt-0.5">Premium Delivery</p>
+            <h1 className="font-display font-bold text-xl text-gold-400 tracking-tight leading-tight uppercase">Fugo Repair</h1>
+            <p className="text-[10px] text-gray-500 tracking-[0.2em] font-medium uppercase -mt-0.5">Service Protocol</p>
           </div>
         </div>
 

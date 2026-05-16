@@ -10,7 +10,7 @@ import {
   X,
   Check,
   ChevronRight,
-  Fuel,
+  Wrench,
   TrendingUp,
   Clock,
   Navigation2,
@@ -18,6 +18,7 @@ import {
   Bell
 } from 'lucide-react';
 import MapView from '../components/Map';
+import SlotBooking from '../components/SlotBooking';
 import { 
   UserProfile, 
   Order, 
@@ -31,6 +32,7 @@ import {
   acceptOrder, 
   updateOrderStatus, 
   createSOS,
+  updateProfileLocation,
   subscribeToAvailableJobs,
   subscribeToCustomerOrders,
   subscribeToMyActiveDeliveries,
@@ -86,10 +88,10 @@ function OrderETADisplay({ order, currencySymbol }: OrderETADisplayProps) {
     >
       <div className="flex items-center gap-4">
         <div className="w-12 h-12 bg-gold-500 rounded-full flex items-center justify-center">
-          <Fuel className="text-black" />
+          <Wrench className="text-black" />
         </div>
         <div>
-          <p className="text-gold-400 font-bold text-sm uppercase italic tracking-tighter">ORDER {order.status}</p>
+          <p className="text-gold-400 font-bold text-sm uppercase italic tracking-tighter">SERVICE {order.status}</p>
           <p className="text-gray-400 text-[12px] font-mono">{order.fuelType} - {currencySymbol}{order.price.toFixed(2)}</p>
         </div>
       </div>
@@ -115,9 +117,33 @@ export default function Dashboard({ profile }: DashboardProps) {
   const [myOrders, setMyOrders] = useState<Order[]>([]);
   const [sosAlerts, setSosAlerts] = useState<SOSAlert[]>([]);
   const [isOrdering, setIsOrdering] = useState(false);
-  const [orderForm, setOrderForm] = useState({ fuelType: 'Premium Gasoline', amount: 50 });
+  const [orderForm, setOrderForm] = useState({ fuelType: 'Standard Repair', amount: 1 });
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>('default');
+  const [driverLocation, setDriverLocation] = useState<Location | null>(null);
+  const [showSlotBooking, setShowSlotBooking] = useState(false);
+
+  // Real-time location simulation for Driver
+  useEffect(() => {
+    if (profile.role === UserRole.DRIVER && profile.status === UserStatus.ONLINE) {
+      const interval = setInterval(() => {
+        // Mock slight movement
+        const newLat = (profile.location?.lat || 37.42) + (Math.random() - 0.5) * 0.001;
+        const newLng = (profile.location?.lng || -122.08) + (Math.random() - 0.5) * 0.001;
+        const newLoc = { lat: newLat, lng: newLng, address: profile.location?.address };
+        
+        if (profile.uid !== 'guest-id') {
+          updateProfileLocation(newLoc);
+        } else {
+            // Update local profile for guest
+            // This is harder since profile comes from props, ideally we'd have a local state update too
+            // For now, let's just use it to power the map
+            setDriverLocation(newLoc);
+        }
+      }, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [profile.role, profile.status, profile.uid, profile.location]);
 
   const prevSosCount = useRef(sosAlerts.length);
   const prevJobsCount = useRef(availableJobs.length);
@@ -245,15 +271,15 @@ export default function Dashboard({ profile }: DashboardProps) {
   const handleCreateOrder = async () => {
     // Mocking current location for now
     const location = { lat: 37.42, lng: -122.08, address: "Tech Square, Palo Alto" };
-    const price = orderForm.amount * priceMultiplier;
+    const price = orderForm.amount * priceMultiplier * 50; // Adjusted for service pricing
     
     try {
       if (profile.uid === 'guest-id') {
         const newOrder: Order = {
-          id: `mock-${Date.now()}`,
+          id: `fugo-${Date.now()}`,
           customerId: profile.uid,
           driverId: null,
-          fuelType: orderForm.fuelType,
+          fuelType: orderForm.fuelType, // keeping field name though it is service type
           amount: orderForm.amount,
           location,
           status: OrderStatus.PENDING,
@@ -263,13 +289,14 @@ export default function Dashboard({ profile }: DashboardProps) {
         };
         setMyOrders(prev => [newOrder, ...prev]);
         setIsOrdering(false);
-        setSuccessMessage("FUGO DELIVERY REQUEST TRANSMITTED.");
+        setSuccessMessage("FUGO SERVICE REQUEST TRANSMITTED.");
         setTimeout(() => setSuccessMessage(null), 4000);
         return;
       }
 
       const orderId = await createOrder({
-        ...orderForm,
+        fuelType: orderForm.fuelType,
+        amount: orderForm.amount,
         location,
         price,
       });
@@ -345,7 +372,21 @@ export default function Dashboard({ profile }: DashboardProps) {
 
       <div className="absolute inset-0">
         <MapView 
+          center={profile.role === UserRole.DRIVER ? (driverLocation || profile.location || undefined) : (profile.location || undefined)}
           markers={[
+            ...(profile.role === UserRole.DRIVER ? [{
+                id: profile.uid,
+                position: driverLocation || profile.location || { lat: 37.42, lng: -122.08 },
+                type: 'driver' as const
+            }] : []),
+            ...activeUserOrders.filter(o => o.driverId).map(o => ({
+                id: `driver-${o.id}`,
+                position: { 
+                  lat: o.location.lat + 0.005, // Mock driver position slightly offset
+                  lng: o.location.lng + 0.005 
+                },
+                type: 'driver' as const
+            })),
             ...allVisibleOrders.map(o => ({ 
               id: o.id, 
               position: o.location, 
@@ -415,16 +456,24 @@ export default function Dashboard({ profile }: DashboardProps) {
                    </div>
                    <h3 className="text-white font-display font-bold text-2xl italic tracking-tighter uppercase mb-2">Squadron Standby</h3>
                    <p className="text-gray-500 text-xs font-bold uppercase tracking-[0.2em] mb-8">You are currently logged off. Go online to receive high-priority refueling missions.</p>
-                   <button 
-                    onClick={() => {
-                        // This trigger is handled in Layout, but we can show a hint
-                        const btn = document.querySelector('button[class*="border-red-500"]');
-                        if (btn instanceof HTMLButtonElement) btn.click();
-                    }}
-                    className="w-full bg-red-600 text-white font-bold py-4 rounded-2xl uppercase tracking-widest text-xs active:scale-95 transition-all shadow-[0_10px_30px_rgba(220,38,38,0.3)]"
-                   >
-                    Engage Duty
-                   </button>
+                    <div className="space-y-3">
+                        <button 
+                            onClick={() => {
+                                // This trigger is handled in Layout, but we can show a hint
+                                const btn = document.querySelector('button[class*="border-red-500"]');
+                                if (btn instanceof HTMLButtonElement) btn.click();
+                            }}
+                            className="w-full bg-red-600 text-white font-bold py-4 rounded-2xl uppercase tracking-widest text-xs active:scale-95 transition-all shadow-[0_10px_30px_rgba(220,38,38,0.3)]"
+                        >
+                            Engage Duty
+                        </button>
+                        <button 
+                            onClick={() => setShowSlotBooking(true)}
+                            className="w-full bg-white/5 border border-white/10 text-gray-400 font-bold py-4 rounded-2xl uppercase tracking-widest text-xs active:scale-95 transition-all"
+                        >
+                            Review Shifts
+                        </button>
+                    </div>
                 </motion.div>
               )}
 
@@ -509,11 +558,11 @@ export default function Dashboard({ profile }: DashboardProps) {
                    className="bg-black border-2 border-gold-500/50 p-6 rounded-[32px] shadow-[0_0_100px_rgba(247,167,10,0.2)] pointer-events-auto relative overflow-hidden"
                  >
                      <div className="absolute top-0 right-0 p-4 opacity-10">
-                        <Fuel size={64} className="text-gold-500" />
+                        <Wrench size={64} className="text-gold-500" />
                      </div>
                      <div className="flex items-center gap-4 mb-6 relative z-10">
                          <div className="w-14 h-14 bg-gold-500 rounded-full flex items-center justify-center relative shadow-lg shadow-gold-500/30">
-                            <Fuel className="text-black" size={28} />
+                            <Wrench className="text-black" size={28} />
                             <span className="absolute -top-1 -right-1 flex h-5 w-5">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-gold-400 opacity-75"></span>
                                 <span className="relative inline-flex rounded-full h-5 w-5 bg-gold-500 border-2 border-black"></span>
@@ -569,8 +618,8 @@ export default function Dashboard({ profile }: DashboardProps) {
             >
               <div className="flex justify-between items-center mb-8">
                 <div>
-                    <h2 className="text-2xl font-display font-bold text-gold-400 italic">REQUEST DELIVERY</h2>
-                    <p className="text-xs text-gray-500 uppercase tracking-[0.2em] font-medium mt-1">High-Speed Fugo Delivery</p>
+                    <h2 className="text-2xl font-display font-bold text-gold-400 italic">REQUEST SERVICE</h2>
+                    <p className="text-xs text-gray-500 uppercase tracking-[0.2em] font-medium mt-1">High-Precision Fugo Repair</p>
                 </div>
                 <button onClick={() => setIsOrdering(false)} className="bg-gray-800 p-2 rounded-full text-gray-400">
                   <X size={24} />
@@ -579,14 +628,14 @@ export default function Dashboard({ profile }: DashboardProps) {
 
               <div className="space-y-6 mb-10">
                 <div>
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3 block">Fuel Type</label>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3 block">Service Category</label>
                   <div className="grid grid-cols-2 gap-3">
-                    {['Premium Gasoline', 'Diesel Elite'].map(type => (
+                    {['Standard Repair', 'Maintenance', 'Emergency Fix', 'Inspection'].map(type => (
                       <button 
                         key={type}
                         onClick={() => setOrderForm(prev => ({ ...prev, fuelType: type }))}
                         className={cn(
-                          "px-4 py-3 rounded-2xl border transition-all font-bold text-sm",
+                          "px-4 py-3 rounded-2xl border transition-all font-bold text-sm text-left",
                           orderForm.fuelType === type 
                             ? "bg-gold-500/10 border-gold-500 text-gold-400" 
                             : "bg-gray-800 border-transparent text-gray-400"
@@ -599,21 +648,19 @@ export default function Dashboard({ profile }: DashboardProps) {
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3 block">Amount ({isIndia ? 'Litres' : 'Gallons'})</label>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3 block">Scale of Operation</label>
                   <div className="flex items-center gap-6 bg-gray-800 p-6 rounded-3xl justify-center">
                     <button 
-                        onClick={() => setOrderForm(prev => ({ ...prev, amount: Math.max(1, prev.amount - 5) }))}
-                        className="w-12 h-12 rounded-full border border-gray-600 flex items-center justify-center text-gold-400 hover:bg-gray-700"
+                        onClick={() => setOrderForm(prev => ({ ...prev, amount: Math.max(1, prev.amount - 1) }))}
+                        className="w-12 h-12 rounded-full border border-gray-600 flex items-center justify-center text-gold-400 hover:bg-gray-700 font-bold"
                     >-</button>
-                    <input 
-                      type="number" 
-                      value={orderForm.amount}
-                      onChange={(e) => setOrderForm(prev => ({ ...prev, amount: parseInt(e.target.value) || 0 }))}
-                      className="bg-transparent text-4xl font-display font-bold text-white text-center w-24 outline-none border-b-2 border-gold-900/30 focus:border-gold-500 transition-colors"
-                    />
+                    <div className="text-center">
+                        <span className="text-4xl font-display font-bold text-white block">{orderForm.amount}</span>
+                        <span className="text-[8px] text-gray-500 uppercase font-bold tracking-[0.2em]">Complexity Level</span>
+                    </div>
                     <button 
-                        onClick={() => setOrderForm(prev => ({ ...prev, amount: prev.amount + 5 }))}
-                        className="w-12 h-12 rounded-full border border-gray-600 flex items-center justify-center text-gold-400 hover:bg-gray-700"
+                        onClick={() => setOrderForm(prev => ({ ...prev, amount: prev.amount + 1 }))}
+                        className="w-12 h-12 rounded-full border border-gray-600 flex items-center justify-center text-gold-400 hover:bg-gray-700 font-bold"
                     >+</button>
                   </div>
                 </div>
@@ -632,6 +679,26 @@ export default function Dashboard({ profile }: DashboardProps) {
               </button>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showSlotBooking && (
+          <motion.div 
+            initial={{ opacity: 0, x: '100%' }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: '100%' }}
+            className="fixed inset-0 z-[100]"
+          >
+            <SlotBooking 
+              onClose={() => setShowSlotBooking(false)} 
+              onBooked={() => {
+                setShowSlotBooking(false);
+                setSuccessMessage("SHIFTS RESERVED SUCCESSFULLY");
+                setTimeout(() => setSuccessMessage(null), 3000);
+              }} 
+            />
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

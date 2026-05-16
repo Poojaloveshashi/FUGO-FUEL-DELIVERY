@@ -8,7 +8,7 @@ import {
   User,
   History,
   TrendingDown,
-  Fuel,
+  Wrench,
   Package,
   Activity,
   CheckCircle2,
@@ -76,39 +76,39 @@ export default function Earnings({ profile }: EarningsProps) {
     if (profile.uid === 'guest-id') {
       const mockOrders: Order[] = isDriver ? [
         {
-          id: 'mock-1',
+          id: 'fugo-1',
           customerId: 'cust-1',
           driverId: 'guest-id',
           status: OrderStatus.COMPLETED,
-          fuelType: 'Premium Gasoline',
-          amount: 25,
-          location: { lat: 0, lng: 0, address: 'Elite Residence, Palo Alto' },
-          price: isIndia ? 8750 : 112.50,
+          fuelType: 'Standard Repair',
+          amount: 1,
+          location: { lat: 0, lng: 0, address: 'Tech Park Sector 4' },
+          price: isIndia ? 5000 : 80.00,
           createdAt: new Date(Date.now() - 86400000).toISOString(),
           updatedAt: new Date(Date.now() - 86400000).toISOString()
         },
         {
-          id: 'mock-2',
+          id: 'fugo-2',
           customerId: 'cust-2',
           driverId: 'guest-id',
           status: OrderStatus.COMPLETED,
-          fuelType: 'Diesel Heavy',
-          amount: 50,
-          location: { lat: 0, lng: 0, address: 'Construction Site B' },
-          price: isIndia ? 17500 : 225.00,
+          fuelType: 'Full Maintenance',
+          amount: 3,
+          location: { lat: 0, lng: 0, address: 'Industrial Zone 7' },
+          price: isIndia ? 15000 : 250.00,
           createdAt: new Date(Date.now() - 172800000).toISOString(),
           updatedAt: new Date(Date.now() - 172800000).toISOString()
         }
       ] : [
         {
-          id: 'mock-3',
+          id: 'fugo-3',
           customerId: 'guest-id',
           driverId: 'driver-1',
           status: OrderStatus.COMPLETED,
-          fuelType: 'Premium Gasoline',
-          amount: 15,
-          location: { lat: 0, lng: 0, address: 'Home Office' },
-          price: isIndia ? 5250 : 67.50,
+          fuelType: 'Emergency Fix',
+          amount: 2,
+          location: { lat: 0, lng: 0, address: 'Private Estate' },
+          price: isIndia ? 12000 : 180.00,
           createdAt: new Date(Date.now() - 43200000).toISOString(),
           updatedAt: new Date(Date.now() - 43200000).toISOString()
         }
@@ -148,7 +148,7 @@ export default function Earnings({ profile }: EarningsProps) {
         </div>
         <div className="relative z-10">
             <div className="flex items-center gap-2 mb-2">
-                <span className="text-white/70 text-xs font-bold uppercase tracking-widest">{isDriver ? 'Total Earnings' : 'Total Fuel Spend'}</span>
+                <span className="text-white/70 text-xs font-bold uppercase tracking-widest">{isDriver ? 'Total Revenue' : 'Total Service Spend'}</span>
                 {completedOrders.length > 0 && (
                   <div className="flex items-center text-[10px] bg-white/20 px-2 py-0.5 rounded-full text-white font-bold">
                       <ArrowUpRight size={10} />
@@ -160,12 +160,12 @@ export default function Earnings({ profile }: EarningsProps) {
             
             <div className="mt-10 grid grid-cols-2 gap-4">
                 <div className="bg-black/20 backdrop-blur-sm p-4 rounded-2xl border border-white/10">
-                    <p className="text-white/60 text-[10px] font-bold uppercase mb-1">Avg per {isDriver ? 'Job' : 'Trip'}</p>
+                    <p className="text-white/60 text-[10px] font-bold uppercase mb-1">Avg per {isDriver ? 'Job' : 'Service'}</p>
                     <p className="text-xl font-bold text-white tracking-tight">{currencySymbol}{avgValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                 </div>
                 <div className="bg-black/20 backdrop-blur-sm p-4 rounded-2xl border border-white/10">
-                    <p className="text-white/60 text-[10px] font-bold uppercase mb-1">{isDriver ? 'Successful Missions' : 'Fuel Cycles'}</p>
-                    <p className="text-xl font-bold text-white tracking-tight">{completedOrders.length} {isDriver ? 'Missions' : 'Cycles'}</p>
+                    <p className="text-white/60 text-[10px] font-bold uppercase mb-1">{isDriver ? 'Successful Repairs' : 'Service Cycles'}</p>
+                    <p className="text-xl font-bold text-white tracking-tight">{completedOrders.length} {isDriver ? 'Repairs' : 'Services'}</p>
                 </div>
             </div>
         </div>
@@ -215,7 +215,7 @@ export default function Earnings({ profile }: EarningsProps) {
       {/* Detailed Operational History */}
       <section className="space-y-6">
           <div className="flex items-center justify-between">
-            <h3 className="text-white font-bold uppercase tracking-widest text-xs italic">{isDriver ? 'Mission Logs' : 'Refueling Ledger'}</h3>
+            <h3 className="text-white font-bold uppercase tracking-widest text-xs italic">{isDriver ? 'Service Logs' : 'Repair Ledger'}</h3>
             <p className="text-gray-500 text-[10px] uppercase font-bold tracking-widest">{sortedOrders.length} Records Found</p>
           </div>
           
@@ -279,12 +279,12 @@ export default function Earnings({ profile }: EarningsProps) {
                     
                     <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
                        <div className="flex items-center gap-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-                          <Package size={12} className="text-gold-500" />
-                          <span>{order.amount} L Units</span>
+                          <Wrench size={12} className="text-gold-500" />
+                          <span>Complexity {order.amount}</span>
                        </div>
                        <div className="flex items-center gap-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest truncate">
                           <Activity size={12} className="text-gold-500 flex-shrink-0" />
-                          <span className="truncate">{order.location.address || 'Elite Sector'}</span>
+                          <span className="truncate">{order.location.address || 'Service Sector'}</span>
                        </div>
                     </div>
 

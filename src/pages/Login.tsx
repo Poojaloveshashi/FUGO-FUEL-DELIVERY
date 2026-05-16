@@ -7,7 +7,7 @@ import {
   ArrowLeft,
   Loader2,
   AlertCircle,
-  Fuel
+  Wrench
 } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import { setupRecaptcha, signInWithPhone } from '../services/store';
@@ -72,10 +72,10 @@ export default function Login({ onGuestLogin }: LoginProps) {
       >
         <div className="text-center mb-12">
             <div className="w-20 h-20 bg-gold-600 rounded-[28px] mx-auto mb-6 flex items-center justify-center shadow-[0_20px_50px_rgba(247,167,10,0.3)] rotate-3">
-                <Fuel size={40} className="text-black -rotate-3" />
+                <Wrench size={40} className="text-black -rotate-3" />
             </div>
-            <h1 className="text-white font-display font-bold text-4xl italic tracking-tighter uppercase mb-2">Fugo Delivery</h1>
-            <p className="text-gray-500 text-xs font-bold uppercase tracking-[0.3em]">Precision Logistics Protocol</p>
+            <h1 className="text-white font-display font-bold text-4xl italic tracking-tighter uppercase mb-2">Fugo Repair</h1>
+            <p className="text-gray-500 text-xs font-bold uppercase tracking-[0.3em]">Precision Service Protocol</p>
         </div>
 
         <div className="bg-gray-900/40 border border-white/5 backdrop-blur-2xl p-8 rounded-[40px] shadow-2xl relative">

@@ -31,7 +31,7 @@ export default function SlotBooking({ onClose, onBooked }: SlotBookingProps) {
     {
       id: '1',
       time: '07:01 pm — 09:00 pm',
-      location: 'HYD-NALLAGANDLA NEW',
+      location: 'HYD-CENTRAL REPAIR NODE',
       duration: '2 h',
       break: '20 mins break',
       available: 27
@@ -39,7 +39,7 @@ export default function SlotBooking({ onClose, onBooked }: SlotBookingProps) {
     {
       id: '2',
       time: '05:01 pm — 07:00 pm',
-      location: 'HYD-NALLAGANDLA NEW',
+      location: 'HYD-NORTH GACHIBOWLI NODE',
       duration: '2 h',
       break: '20 mins break',
       available: 27
@@ -47,7 +47,7 @@ export default function SlotBooking({ onClose, onBooked }: SlotBookingProps) {
     {
       id: '3',
       time: '02:01 pm — 04:00 pm',
-      location: 'HYD-NALLAGANDLA NEW',
+      location: 'HYD-WEST BEYOND NODE',
       duration: '2 h',
       break: '20 mins break',
       available: 15
@@ -69,27 +69,27 @@ export default function SlotBooking({ onClose, onBooked }: SlotBookingProps) {
 
   if (bookingConfirmed) {
     return (
-      <div className="fixed inset-0 bg-white z-[100] flex flex-col items-center justify-center p-6 text-center">
+      <div className="fixed inset-0 bg-black z-[100] flex flex-col items-center justify-center p-6 text-center">
         <motion.div 
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
-          className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mb-6"
+          className="w-24 h-24 bg-gold-500/10 rounded-full flex items-center justify-center mb-6 border border-gold-500/50"
         >
-          <CheckCircle2 size={48} className="text-green-600" />
+          <CheckCircle2 size={48} className="text-gold-500" />
         </motion.div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Booking Confirmed!</h2>
-        <p className="text-gray-500">Your slots have been successfully reserved.</p>
+        <h2 className="text-2xl font-display font-bold text-white italic uppercase tracking-tighter mb-2">Shift Synchronized</h2>
+        <p className="text-gray-500 text-xs font-bold uppercase tracking-widest leading-relaxed">Your service slots have been established in the global repair ledger.</p>
       </div>
     );
   }
 
   return (
-    <div className="fixed inset-0 bg-white z-[90] flex flex-col">
-      <div className="p-4 flex items-center justify-between border-b border-gray-100">
+    <div className="fixed inset-0 bg-gray-50 z-[90] flex flex-col">
+      <div className="p-4 flex items-center justify-between border-b border-gray-100 bg-white">
         <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-gray-900">Gachibowli</h1>
+            <h1 className="text-xl font-bold text-gray-900">Hyderabad Node</h1>
             <div className="bg-gray-100 p-1 rounded-md">
-                <ChevronLeft size={20} className="text-pink-500 rotate-[270deg]" />
+                <ChevronLeft size={20} className="text-gold-600 rotate-[270deg]" />
             </div>
         </div>
         <div className="flex items-center gap-4">
@@ -98,10 +98,10 @@ export default function SlotBooking({ onClose, onBooked }: SlotBookingProps) {
         </div>
       </div>
 
-      <div className="p-4 bg-gray-50/50 flex items-center justify-between">
-        <h2 className="text-lg font-bold text-gray-900">Review Slots</h2>
-        <div className="bg-white px-3 py-1 rounded-full border border-gray-200">
-            <span className="text-xs font-bold text-gray-500">{selectedSlots.length} Slots • {selectedSlots.length * 2} h</span>
+      <div className="p-4 bg-gold-50/50 flex items-center justify-between border-b border-gold-100">
+        <h2 className="text-lg font-bold text-gray-900 italic uppercase tracking-tighter">Shift Selection</h2>
+        <div className="bg-white px-3 py-1 rounded-full border border-gold-200">
+            <span className="text-[10px] font-bold text-gold-600 uppercase tracking-widest">{selectedSlots.length} Slots • {selectedSlots.length * 2} h</span>
         </div>
       </div>
 
@@ -110,9 +110,9 @@ export default function SlotBooking({ onClose, onBooked }: SlotBookingProps) {
             <div className="bg-gray-100 p-1 rounded-md rotate-90">
                 <ChevronLeft size={16} className="text-gray-400" />
             </div>
-            <h3 className="font-bold text-gray-900">Today</h3>
-            <span className="bg-purple-100 text-purple-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                {selectedSlots.length} Slots • {selectedSlots.length * 2} h
+            <h3 className="font-bold text-gray-900 uppercase text-sm italic tracking-widest">Today's Duty</h3>
+            <span className="bg-gold-100 text-gold-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-tighter">
+                {selectedSlots.length} Selected
             </span>
         </div>
 
@@ -121,17 +121,17 @@ export default function SlotBooking({ onClose, onBooked }: SlotBookingProps) {
             <div 
               key={slot.id}
               onClick={() => handleToggle(slot.id)}
-              className="relative bg-white border border-gray-100 rounded-2xl p-5 shadow-sm active:scale-[0.98] transition-all cursor-pointer"
+              className={`relative bg-white border rounded-2xl p-5 shadow-sm active:scale-[0.98] transition-all cursor-pointer ${selectedSlots.includes(slot.id) ? 'border-gold-500 ring-4 ring-gold-500/5' : 'border-gray-100'}`}
             >
                 <div className="flex justify-between items-start mb-1">
-                    <span className="text-lg font-bold text-gray-900">{slot.time}</span>
-                    <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${selectedSlots.includes(slot.id) ? 'bg-purple-600 border-purple-600' : 'border-gray-200'}`}>
-                        {selectedSlots.includes(slot.id) && <Check size={14} className="text-white" />}
+                    <span className="text-lg font-bold text-gray-900 font-mono">{slot.time}</span>
+                    <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${selectedSlots.includes(slot.id) ? 'bg-gold-500 border-gold-500' : 'border-gray-200'}`}>
+                        {selectedSlots.includes(slot.id) && <Check size={14} className="text-black" />}
                     </div>
                 </div>
                 <div className="space-y-1">
-                    <div className="text-sm font-medium text-gray-400 uppercase tracking-tight">{slot.location}</div>
-                    <div className="flex items-center gap-2 text-xs font-bold text-gray-400">
+                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{slot.location}</div>
+                    <div className="flex items-center gap-2 text-xs font-bold text-gold-600/50 uppercase tracking-tighter">
                         <span>{slot.duration}</span>
                         <div className="w-1 h-1 bg-gray-300 rounded-full" />
                         <span>{slot.break}</span>
@@ -139,7 +139,7 @@ export default function SlotBooking({ onClose, onBooked }: SlotBookingProps) {
                 </div>
                 <div className="absolute top-5 right-14">
                     <span className="bg-green-50 text-green-700 text-[10px] font-bold px-2 py-1 rounded-md">
-                        {slot.available} Free Slot
+                        {slot.available} Units Open
                     </span>
                 </div>
             </div>
@@ -147,13 +147,13 @@ export default function SlotBooking({ onClose, onBooked }: SlotBookingProps) {
         </div>
       </div>
 
-      <div className="p-4 border-t border-gray-100">
+      <div className="p-4 border-t border-gray-100 bg-white">
         <button 
           onClick={handleConfirm}
           disabled={selectedSlots.length === 0}
-          className="w-full bg-purple-700 hover:bg-purple-800 disabled:opacity-50 text-white font-bold py-4 rounded-xl transition-all shadow-lg active:scale-[0.98]"
+          className="w-full bg-black hover:bg-gray-900 disabled:opacity-50 text-gold-500 font-bold py-5 rounded-2xl transition-all shadow-xl active:scale-[0.98] uppercase tracking-widest text-sm italic"
         >
-          Confirm & Book
+          Confirm Availability
         </button>
       </div>
     </div>
