@@ -67,8 +67,8 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
                         <div className="w-16 h-16 bg-gold-500 rounded-2xl mx-auto flex items-center justify-center mb-6">
                             <User size={32} className="text-black" />
                         </div>
-                        <h2 className="text-white font-display font-bold text-3xl italic tracking-tighter uppercase">Identify Protocol</h2>
-                        <p className="text-gray-500 text-[10px] uppercase font-bold tracking-[0.3em]">Establish your elite handle</p>
+                        <h2 className="text-white font-display font-bold text-3xl italic tracking-tighter uppercase">Fugo Identifier</h2>
+                        <p className="text-gray-500 text-[10px] uppercase font-bold tracking-[0.3em]">Establish your delivery handle</p>
                     </div>
 
                     <div className="space-y-4">

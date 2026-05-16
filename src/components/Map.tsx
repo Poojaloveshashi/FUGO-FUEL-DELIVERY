@@ -42,11 +42,13 @@ function MarkerWithRef({ marker, onMarkerCreated, onMarkerDestroyed }: {
       <Pin 
         background={
           marker.type === 'sos' ? '#ef4444' : 
-          marker.type === 'driver' ? '#f7a70a' : 
+          marker.type === 'driver' ? '#9333ea' : 
+          marker.type === 'customer' ? '#f43f5e' :
           '#3b82f6'
         } 
         glyphColor="#fff" 
-        borderColor="#000"
+        borderColor="#fff"
+        scale={marker.type === 'driver' ? 1.2 : 1}
       />
     </AdvancedMarker>
   );

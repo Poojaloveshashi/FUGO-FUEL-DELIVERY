@@ -263,7 +263,7 @@ export default function Dashboard({ profile }: DashboardProps) {
         };
         setMyOrders(prev => [newOrder, ...prev]);
         setIsOrdering(false);
-        setSuccessMessage("ELITE REFUEL REQUEST TRANSMITTED.");
+        setSuccessMessage("FUGO DELIVERY REQUEST TRANSMITTED.");
         setTimeout(() => setSuccessMessage(null), 4000);
         return;
       }
@@ -275,7 +275,7 @@ export default function Dashboard({ profile }: DashboardProps) {
       });
       if (orderId) {
         setIsOrdering(false);
-        setSuccessMessage("ELITE REFUEL REQUEST TRANSMITTED.");
+        setSuccessMessage("FUGO DELIVERY REQUEST TRANSMITTED.");
         setTimeout(() => setSuccessMessage(null), 4000);
       }
     } catch (error) {
@@ -520,7 +520,7 @@ export default function Dashboard({ profile }: DashboardProps) {
                             </span>
                          </div>
                          <div>
-                             <h4 className="font-bold text-gold-400 uppercase tracking-tighter text-xl leading-tight">Elite Task Found</h4>
+                             <h4 className="font-bold text-gold-400 uppercase tracking-tighter text-xl leading-tight">Fugo Task Found</h4>
                              <p className="text-gray-500 text-[10px] font-bold uppercase tracking-[0.2em]">{currencySymbol}{(pendingIncomingOrders[0]?.price || 0).toFixed(2)} Credit Potential</p>
                          </div>
                      </div>
@@ -569,8 +569,8 @@ export default function Dashboard({ profile }: DashboardProps) {
             >
               <div className="flex justify-between items-center mb-8">
                 <div>
-                    <h2 className="text-2xl font-display font-bold text-gold-400 italic">REQUEST REFUEL</h2>
-                    <p className="text-xs text-gray-500 uppercase tracking-[0.2em] font-medium mt-1">Premium Energy Delivery</p>
+                    <h2 className="text-2xl font-display font-bold text-gold-400 italic">REQUEST DELIVERY</h2>
+                    <p className="text-xs text-gray-500 uppercase tracking-[0.2em] font-medium mt-1">High-Speed Fugo Delivery</p>
                 </div>
                 <button onClick={() => setIsOrdering(false)} className="bg-gray-800 p-2 rounded-full text-gray-400">
                   <X size={24} />
@@ -628,7 +628,7 @@ export default function Dashboard({ profile }: DashboardProps) {
                 onClick={handleCreateOrder}
                 className="w-full bg-gold-500 hover:bg-gold-400 text-black font-bold py-5 rounded-3xl shadow-2xl shadow-gold-500/20 transition-all uppercase tracking-widest"
               >
-                Confirm Elite Refuel
+                Confirm Fugo Delivery
               </button>
             </motion.div>
           </>

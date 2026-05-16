@@ -1,5 +1,5 @@
 {
-  "name": "Fugo Fuel",
+  "name": "Fugo Delivery",
   "description": "Premium fuel delivery and emergency SOS app with live tracking and earnings dashboard.",
   "requestFramePermissions": ["geolocation"],
   "majorCapabilities": ["maps", "realtime"]

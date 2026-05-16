@@ -8,6 +8,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import ProfilePage from './pages/Profile';
 import Onboarding from './pages/Onboarding';
+import Permissions from './pages/Permissions';
 import EarningsPage from './pages/Earnings';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -28,6 +29,8 @@ export default function App() {
   const [guestRole, setGuestRole] = useState<UserRole>(UserRole.DRIVER);
   const [guestStatus, setGuestStatus] = useState<UserStatus>(UserStatus.ONLINE);
   const [guestMode, setGuestMode] = useState(false);
+  const [showPermissions, setShowPermissions] = useState(false);
+  const [permissionGranted, setPermissionGranted] = useState(false);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
@@ -62,8 +65,13 @@ export default function App() {
   if (!user && !guestMode) {
     return <Login onGuestLogin={() => {
         setGuestMode(true);
-        setLoading(false);
+        setShowPermissions(true);
     }} />;
+  }
+
+  // Show Permissions Screen if needed (Guest or New User)
+  if (showPermissions && !permissionGranted) {
+    return <Permissions onProceed={() => setPermissionGranted(true)} />;
   }
 
   // Logged in but profile still loading
