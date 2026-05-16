@@ -15,7 +15,15 @@ import {
   Clock,
   Navigation2,
   Power,
-  Bell
+  Bell,
+  HelpCircle,
+  Zap,
+  Gift,
+  Search,
+  ArrowRight,
+  Wallet,
+  Calendar,
+  Hammer
 } from 'lucide-react';
 import MapView from '../components/Map';
 import SlotBooking from '../components/SlotBooking';
@@ -25,7 +33,8 @@ import {
   OrderStatus, 
   UserRole, 
   UserStatus,
-  SOSAlert 
+  SOSAlert,
+  Location 
 } from '../types';
 import { 
   createOrder, 
@@ -37,9 +46,10 @@ import {
   subscribeToCustomerOrders,
   subscribeToMyActiveDeliveries,
   subscribeToSOS,
-  subscribeToUserProfile
+  subscribeToUserProfile,
+  updateProfileStatus
 } from '../services/store';
-import { cn, calculateETA } from '../lib/utils';
+import { cn } from '../lib/utils';
 import { 
   requestNotificationPermission, 
   triggerSOSNotification, 
@@ -50,63 +60,12 @@ interface DashboardProps {
   profile: UserProfile;
 }
 
-interface OrderETADisplayProps {
-  order: Order;
-  currencySymbol: string;
-  key?: React.Key | string;
-}
-
-function OrderETADisplay({ order, currencySymbol }: OrderETADisplayProps) {
-  const [driverProfile, setDriverProfile] = useState<UserProfile | null>(null);
-  const [mockETA, setMockETA] = useState(12);
-
-  useEffect(() => {
-    if (!order.driverId) return;
-    if (order.driverId === 'guest-id') {
-      const interval = setInterval(() => {
-        setMockETA(prev => Math.max(1, prev - 1));
-      }, 30000); // Decrease mock ETA every 30s
-      return () => clearInterval(interval);
-    }
-    return subscribeToUserProfile(order.driverId, setDriverProfile);
-  }, [order.driverId]);
-
-  const eta = driverProfile?.location && order.location
-    ? calculateETA(
-        driverProfile.location.lat, 
-        driverProfile.location.lng, 
-        order.location.lat, 
-        order.location.lng
-      )
-    : mockETA;
-
-  return (
-    <motion.div 
-      initial={{ y: -20, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      className="bg-gray-900 border border-gold-400 px-4 py-4 rounded-2xl shadow-2xl pointer-events-auto flex items-center justify-between"
-    >
-      <div className="flex items-center gap-4">
-        <div className="w-12 h-12 bg-gold-500 rounded-full flex items-center justify-center">
-          <Wrench className="text-black" />
-        </div>
-        <div>
-          <p className="text-gold-400 font-bold text-sm uppercase italic tracking-tighter">SERVICE {order.status}</p>
-          <p className="text-gray-400 text-[12px] font-mono">{order.fuelType} - {currencySymbol}{order.price.toFixed(2)}</p>
-        </div>
-      </div>
-      <div className="flex flex-col items-end">
-          <div className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-gold-500 animate-ping" />
-            <span className="text-[10px] text-gray-500 font-medium tracking-widest uppercase">ETA {eta} MINS</span>
-          </div>
-          {driverProfile?.displayName && (
-            <span className="text-[8px] text-gold-500/50 uppercase font-bold mt-1">Unit: {driverProfile.displayName}</span>
-          )}
-      </div>
-    </motion.div>
-  );
-}
+// Banners for the slider
+const BANNERS = [
+  { id: 1, title: 'Extra ₹75 per trip!', desc: 'Earn more during peak hours (7 PM - 11 PM)', color: 'from-orange-500 to-red-500' },
+  { id: 2, title: 'Refer & Earn ₹500', desc: 'Invite your fellow technicians to the Fugo network', color: 'from-blue-600 to-cyan-500' },
+  { id: 3, title: 'Insurance Covered', desc: 'Fugo now provides on-duty medical coverage', color: 'from-emerald-600 to-teal-500' },
+];
 
 export default function Dashboard({ profile }: DashboardProps) {
   const isIndia = ['Asia/Calcutta', 'Asia/Kolkata'].includes(Intl.DateTimeFormat().resolvedOptions().timeZone);
@@ -119,15 +78,15 @@ export default function Dashboard({ profile }: DashboardProps) {
   const [isOrdering, setIsOrdering] = useState(false);
   const [orderForm, setOrderForm] = useState({ fuelType: 'Standard Repair', amount: 1 });
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [notifPermission, setNotifPermission] = useState<NotificationPermission>('default');
   const [driverLocation, setDriverLocation] = useState<Location | null>(null);
   const [showSlotBooking, setShowSlotBooking] = useState(false);
+  const [bannerIndex, setBannerIndex] = useState(0);
+  const [selectedCategory, setSelectedCategory] = useState('All');
 
   // Real-time location simulation for Driver
   useEffect(() => {
     if (profile.role === UserRole.DRIVER && profile.status === UserStatus.ONLINE) {
       const interval = setInterval(() => {
-        // Mock slight movement
         const newLat = (profile.location?.lat || 37.42) + (Math.random() - 0.5) * 0.001;
         const newLng = (profile.location?.lng || -122.08) + (Math.random() - 0.5) * 0.001;
         const newLoc = { lat: newLat, lng: newLng, address: profile.location?.address };
@@ -135,67 +94,30 @@ export default function Dashboard({ profile }: DashboardProps) {
         if (profile.uid !== 'guest-id') {
           updateProfileLocation(newLoc);
         } else {
-            // Update local profile for guest
-            // This is harder since profile comes from props, ideally we'd have a local state update too
-            // For now, let's just use it to power the map
-            setDriverLocation(newLoc);
+          setDriverLocation(newLoc);
         }
       }, 5000);
       return () => clearInterval(interval);
     }
   }, [profile.role, profile.status, profile.uid, profile.location]);
 
-  const prevSosCount = useRef(sosAlerts.length);
-  const prevJobsCount = useRef(availableJobs.length);
-
+  // Banner rotation
   useEffect(() => {
-    if ('Notification' in window) {
-      setNotifPermission(Notification.permission);
-    }
+    const interval = setInterval(() => {
+      setBannerIndex(prev => (prev + 1) % BANNERS.length);
+    }, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    // Detect new SOS alerts
-    if (sosAlerts.length > prevSosCount.current) {
-        const lastSOS = sosAlerts[sosAlerts.length - 1];
-        if (profile.role !== UserRole.CUSTOMER) {
-          triggerSOSNotification(profile.role, lastSOS.location.address || 'Unknown Sector');
-        }
-    }
-    prevSosCount.current = sosAlerts.length;
-  }, [sosAlerts.length, profile.role]);
-
-  useEffect(() => {
-    // Detect new jobs for drivers
-    if (profile.role === UserRole.DRIVER && availableJobs.length > prevJobsCount.current) {
-        triggerNewOrderNotification();
-    }
-    prevJobsCount.current = availableJobs.length;
-  }, [availableJobs.length, profile.role]);
-
-  useEffect(() => {
     if (profile.uid === 'guest-id') {
-      const isIndia = ['Asia/Calcutta', 'Asia/Kolkata'].includes(Intl.DateTimeFormat().resolvedOptions().timeZone);
-      // Setup mock data for guest
       const mockOrders: Order[] = [
         {
           id: 'mock-1',
-          customerId: 'guest-id',
-          driverId: 'guest-id',
-          fuelType: 'Premium Gasoline',
-          amount: 25,
-          location: { lat: 37.424, lng: -122.086, address: "Stanford University" },
-          status: OrderStatus.ACCEPTED,
-          price: isIndia ? 8750 : 112.50,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        },
-        {
-          id: 'mock-2',
           customerId: 'customer-alpha',
           driverId: null,
-          fuelType: 'Diesel Elite',
-          amount: 15,
+          fuelType: 'Standard Repair',
+          amount: 1,
           location: { lat: 37.428, lng: -122.09, address: "Googleplex, Mountain View" },
           status: OrderStatus.PENDING,
           price: isIndia ? 5250 : 67.50,
@@ -215,13 +137,12 @@ export default function Dashboard({ profile }: DashboardProps) {
       ];
 
       setAvailableJobs(mockOrders.filter(o => o.status === OrderStatus.PENDING));
-      setMyOrders(mockOrders.filter(o => o.customerId === 'guest-id' || o.driverId === 'guest-id' || o.id === 'mock-1'));
+      setMyOrders([]);
       setSosAlerts(mockSOS);
       return;
     }
 
     let unsubs: (() => void)[] = [];
-    
     unsubs.push(subscribeToSOS(setSosAlerts));
 
     if (profile.role === UserRole.DRIVER) {
@@ -232,7 +153,17 @@ export default function Dashboard({ profile }: DashboardProps) {
     }
 
     return () => unsubs.forEach(u => u());
-  }, [profile.uid, profile.role]);
+  }, [profile.uid, profile.role, isIndia]);
+
+  const handleToggleStatus = async () => {
+    const newStatus = profile.status === UserStatus.ONLINE ? UserStatus.OFFLINE : UserStatus.ONLINE;
+    if (profile.uid !== 'guest-id') {
+      await updateProfileStatus(newStatus);
+    } else {
+      setSuccessMessage(`STATUS UPDATED TO ${newStatus}`);
+      setTimeout(() => setSuccessMessage(null), 3000);
+    }
+  };
 
   const handleAcceptJob = async (orderId: string) => {
     try {
@@ -242,364 +173,387 @@ export default function Dashboard({ profile }: DashboardProps) {
           const acceptedJob = { ...job, status: OrderStatus.ACCEPTED, driverId: profile.uid };
           setAvailableJobs(prev => prev.filter(j => j.id !== orderId));
           setMyOrders(prev => [...prev, acceptedJob]);
-          setSuccessMessage("MISSION ENGAGED. EN ROUTE.");
-          setTimeout(() => setSuccessMessage(null), 4000);
         }
-        return;
+      } else {
+        await acceptOrder(orderId);
       }
-      
-      await acceptOrder(orderId);
-      setSuccessMessage("MISSION ENGAGED. GPS SYNCING.");
+      setSuccessMessage("TASK ACCEPTED. STARTING TRANSIT.");
       setTimeout(() => setSuccessMessage(null), 4000);
     } catch (error) {
       console.error("Failed to accept job", error);
     }
   };
 
-  const handleCompleteOrder = async (orderId: string) => {
+  const updateOrderDeliveryStatus = async (orderId: string, status: OrderStatus) => {
     if (profile.uid === 'guest-id') {
-      setMyOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: OrderStatus.COMPLETED } : o));
-      setSuccessMessage("MISSION ACCOMPLISHED. CREDIT SECURED.");
-      setTimeout(() => setSuccessMessage(null), 4000);
-      return;
+      setMyOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
+    } else {
+      await updateOrderStatus(orderId, status);
     }
-    await updateOrderStatus(orderId, OrderStatus.COMPLETED);
-    setSuccessMessage("MISSION ACCOMPLISHED. CREDIT SECURED.");
-    setTimeout(() => setSuccessMessage(null), 4000);
+    setSuccessMessage(`STATUS: ${status.toUpperCase()}`);
+    setTimeout(() => setSuccessMessage(null), 3000);
   };
 
-  const handleCreateOrder = async () => {
-    // Mocking current location for now
-    const location = { lat: 37.42, lng: -122.08, address: "Tech Square, Palo Alto" };
-    const price = orderForm.amount * priceMultiplier * 50; // Adjusted for service pricing
-    
-    try {
-      if (profile.uid === 'guest-id') {
-        const newOrder: Order = {
-          id: `fugo-${Date.now()}`,
-          customerId: profile.uid,
-          driverId: null,
-          fuelType: orderForm.fuelType, // keeping field name though it is service type
-          amount: orderForm.amount,
-          location,
-          status: OrderStatus.PENDING,
-          price,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-        setMyOrders(prev => [newOrder, ...prev]);
-        setIsOrdering(false);
-        setSuccessMessage("FUGO SERVICE REQUEST TRANSMITTED.");
-        setTimeout(() => setSuccessMessage(null), 4000);
-        return;
-      }
-
-      const orderId = await createOrder({
-        fuelType: orderForm.fuelType,
-        amount: orderForm.amount,
-        location,
-        price,
-      });
-      if (orderId) {
-        setIsOrdering(false);
-        setSuccessMessage("FUGO DELIVERY REQUEST TRANSMITTED.");
-        setTimeout(() => setSuccessMessage(null), 4000);
-      }
-    } catch (error) {
-      console.error("Failed to create order", error);
-    }
-  };
-
-  const allVisibleOrders = [...availableJobs, ...myOrders];
-  const activeUserOrders = myOrders.filter(o => o.customerId === profile.uid && o.status !== OrderStatus.COMPLETED);
-  const pendingIncomingOrders = availableJobs.filter(o => o.status === OrderStatus.PENDING); // Extra safety filter
-  const myAcceptedOrders = myOrders.filter(o => (o.driverId === profile.uid) && o.status !== OrderStatus.COMPLETED);
-
-  useEffect(() => {
-    if (profile.uid === 'guest-id') {
-      console.log('Fugo Elite Debug: Guest Mode Active', { 
-        role: profile.role, 
-        jobCount: pendingIncomingOrders.length, 
-        myOrderCount: myOrders.length,
-        acceptedCount: myAcceptedOrders.length
-      });
-    }
-  }, [profile.role, pendingIncomingOrders.length, myOrders.length, myAcceptedOrders.length]);
-
-  const handleEnableNotifications = async () => {
-    const granted = await requestNotificationPermission();
-    if (granted) setNotifPermission('granted');
-    else setNotifPermission('denied');
-  };
+  const activeTechnicianJob = myOrders.find(o => o.driverId === profile.uid && o.status !== OrderStatus.COMPLETED);
+  const activeCustomerOrders = myOrders.filter(o => o.customerId === profile.uid && o.status !== OrderStatus.COMPLETED);
 
   return (
-    <div className="h-full relative">
-      {notifPermission === 'default' && profile.role !== UserRole.CUSTOMER && (
-        <div className="absolute top-28 left-1/2 -translate-x-1/2 z-[60] w-full max-w-xs pointer-events-none">
-          <motion.div 
-            initial={{ y: -20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            className="bg-black/80 backdrop-blur-xl border border-gold-500/30 p-4 rounded-2xl shadow-2xl flex items-center justify-between pointer-events-auto"
-          >
-            <div className="flex items-center gap-3">
-              <Bell size={20} className="text-gold-500 animate-pulse" />
-              <p className="text-[10px] text-white font-bold uppercase tracking-wider">Enable Critical Alerts</p>
+    <div className="h-full bg-gray-50 flex flex-col no-scrollbar">
+      {/* Top Navigation */}
+      <header className="bg-white px-6 py-4 border-b border-gray-100 flex items-center justify-between sticky top-0 z-[100]">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-gold-600 rounded-xl flex items-center justify-center text-black font-display font-bold italic rotate-3 shadow-lg">F</div>
+          <div>
+            <h1 className="text-gray-900 font-bold text-lg leading-tight uppercase tracking-tight">Fugo Repair</h1>
+            <div className="flex items-center gap-1.5 text-gray-400 text-[10px] font-bold uppercase tracking-wider">
+              <MapPin size={10} className="text-gold-500" />
+              <span className="truncate max-w-[120px]">{profile.location?.address || 'Detecting Node...'}</span>
             </div>
-            <button 
-              onClick={handleEnableNotifications}
-              className="bg-gold-500 text-black text-[10px] font-bold px-3 py-1.5 rounded-lg uppercase"
-            >
-              Enable
-            </button>
-          </motion.div>
-        </div>
-      )}
-      <div className="absolute inset-x-0 bottom-32 z-50 flex justify-center pointer-events-none">
-        <AnimatePresence>
-          {successMessage && (
-            <motion.div 
-              initial={{ y: 50, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: -20, opacity: 0 }}
-              className="bg-gold-500 text-black px-8 py-4 rounded-2xl shadow-2xl font-bold flex items-center gap-3 backdrop-blur-xl border-4 border-black/10 pointer-events-auto"
-            >
-              <Check size={24} />
-              <span className="uppercase tracking-widest text-xs italic">{successMessage}</span>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      <div className="absolute inset-0">
-        <MapView 
-          center={profile.role === UserRole.DRIVER ? (driverLocation || profile.location || undefined) : (profile.location || undefined)}
-          markers={[
-            ...(profile.role === UserRole.DRIVER ? [{
-                id: profile.uid,
-                position: driverLocation || profile.location || { lat: 37.42, lng: -122.08 },
-                type: 'driver' as const
-            }] : []),
-            ...activeUserOrders.filter(o => o.driverId).map(o => ({
-                id: `driver-${o.id}`,
-                position: { 
-                  lat: o.location.lat + 0.005, // Mock driver position slightly offset
-                  lng: o.location.lng + 0.005 
-                },
-                type: 'driver' as const
-            })),
-            ...allVisibleOrders.map(o => ({ 
-              id: o.id, 
-              position: o.location, 
-              type: 'order' as const 
-            })),
-            ...sosAlerts.map(s => ({ 
-              id: s.id, 
-              position: s.location, 
-              type: 'sos' as const 
-            }))
-          ]}
-        />
-      </div>
-
-      {/* Overlays */}
-      <div className="absolute top-6 left-6 right-6 pointer-events-none flex flex-col gap-3">
-        {/* Active Emergency Alerts */}
-        {sosAlerts.length > 0 && (
-          <motion.div 
-            initial={{ scale: 0.8, opacity: 0, y: -20 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            className="flex items-center gap-4 bg-black border-2 border-red-600 p-5 rounded-3xl shadow-[0_0_50px_rgba(220,38,38,0.3)] pointer-events-auto relative overflow-hidden"
-          >
-            <div className="absolute inset-0 bg-red-600/5 animate-pulse" />
-            <div className="w-14 h-14 bg-red-600 rounded-2xl flex items-center justify-center relative z-10 shadow-lg shadow-red-600/20">
-              <ShieldAlert className="text-white" size={32} />
-            </div>
-            <div className="relative z-10 flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
-                <p className="text-red-500 font-bold text-xs uppercase tracking-[0.2em] italic">Priority Zero Alert</p>
-              </div>
-              <p className="text-white font-bold text-lg tracking-tight uppercase">Emergency Assistance</p>
-              <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">{sosAlerts[0].location.address}</p>
-            </div>
-            <div className="relative z-10">
-              <button 
-                onClick={() => {
-                  setSuccessMessage("SOS LOCATION PINNED. ENGAGING.");
-                  setTimeout(() => setSuccessMessage(null), 4000);
-                }}
-                className="bg-white text-black text-[10px] font-bold px-4 py-2 rounded-full uppercase tracking-tighter hover:bg-red-600 hover:text-white transition-colors"
-              >
-                Respond
-              </button>
-            </div>
-          </motion.div>
-        )}
-
-        {/* User Orders Status */}
-        {activeUserOrders.map(order => (
-          <OrderETADisplay key={order.id} order={order} currencySymbol={currencySymbol} />
-        ))}
-      </div>
-
-      {/* Driver Job Cards */}
-      {profile.role === UserRole.DRIVER && (
-          <div className="absolute bottom-32 left-6 right-6 flex flex-col gap-4 pointer-events-none">
-              {profile.status === UserStatus.OFFLINE && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-black/80 border-2 border-red-900/30 p-8 rounded-[40px] backdrop-blur-xl pointer-events-auto text-center"
-                >
-                   <div className="w-20 h-20 bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-500/20">
-                      <Power size={32} className="text-red-500 opacity-50" />
-                   </div>
-                   <h3 className="text-white font-display font-bold text-2xl italic tracking-tighter uppercase mb-2">Squadron Standby</h3>
-                   <p className="text-gray-500 text-xs font-bold uppercase tracking-[0.2em] mb-8">You are currently logged off. Go online to receive high-priority refueling missions.</p>
-                    <div className="space-y-3">
-                        <button 
-                            onClick={() => {
-                                // This trigger is handled in Layout, but we can show a hint
-                                const btn = document.querySelector('button[class*="border-red-500"]');
-                                if (btn instanceof HTMLButtonElement) btn.click();
-                            }}
-                            className="w-full bg-red-600 text-white font-bold py-4 rounded-2xl uppercase tracking-widest text-xs active:scale-95 transition-all shadow-[0_10px_30px_rgba(220,38,38,0.3)]"
-                        >
-                            Engage Duty
-                        </button>
-                        <button 
-                            onClick={() => setShowSlotBooking(true)}
-                            className="w-full bg-white/5 border border-white/10 text-gray-400 font-bold py-4 rounded-2xl uppercase tracking-widest text-xs active:scale-95 transition-all"
-                        >
-                            Review Shifts
-                        </button>
-                    </div>
-                </motion.div>
-              )}
-
-              {myAcceptedOrders.length > 0 && (
-                  <motion.div 
-                    initial={{ y: 20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    className="bg-black/90 border border-gold-500/50 p-6 rounded-3xl backdrop-blur-xl shadow-2xl pointer-events-auto"
-                  >
-                      <div className="flex justify-between items-start mb-4">
-                        <div>
-                            <h3 className="text-gold-400 font-bold text-lg leading-tight italic">ACTIVE DELIVERY</h3>
-                            <p className="text-gray-500 text-xs font-medium tracking-widest uppercase mt-1">Order #{myAcceptedOrders[0].id.slice(0, 6)}</p>
-                        </div>
-                        <div className="bg-gold-500 p-2 rounded-xl text-black">
-                            <Navigation2 size={20} />
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-3 mb-6">
-                        <div className="flex items-center gap-3">
-                            <MapPin size={16} className="text-gold-500" />
-                            <p className="text-sm font-medium text-gray-300">{myAcceptedOrders[0].location.address}</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <Clock size={16} className="text-gold-500" />
-                            <p className="text-sm font-medium text-gray-300">{myAcceptedOrders[0].amount} Gal • {myAcceptedOrders[0].fuelType}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex gap-3">
-                          <button 
-                            onClick={() => handleCompleteOrder(myAcceptedOrders[0].id)}
-                            className="flex-1 bg-gold-500 hover:bg-gold-400 text-black font-bold py-4 rounded-2xl transition-all shadow-lg shadow-gold-500/20"
-                          >
-                              COMPLETE DROP-OFF
-                          </button>
-                      </div>
-                  </motion.div>
-              )}
-
-              {profile.status === UserStatus.ONLINE && myAcceptedOrders.length === 0 && (
-                <motion.div 
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="bg-gray-900/40 border border-white/5 p-6 rounded-3xl backdrop-blur-md pointer-events-auto"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-gray-500 text-[10px] font-bold uppercase tracking-[0.3em]">Duty Log • Recent Missions</h3>
-                    <div className="flex gap-1">
-                      <div className="w-1 h-1 rounded-full bg-gold-500" />
-                      <div className="w-1 h-1 rounded-full bg-gold-500/50" />
-                      <div className="w-1 h-1 rounded-full bg-gold-500/20" />
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    {[
-                      { id: '101', type: 'Premium', status: 'Success', time: '1h ago', earn: 45 },
-                      { id: '102', type: 'Diesel', status: 'Incentive', time: '3h ago', earn: 62 },
-                    ].map(log => (
-                      <div key={log.id} className="flex justify-between items-center bg-black/40 p-3 rounded-2xl border border-white/5">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-gold-900/20 rounded-xl flex items-center justify-center text-gold-500">
-                             <Check size={14} />
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold text-white uppercase tracking-tighter">Mission #{log.id}</p>
-                            <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">{log.time} • {log.type}</p>
-                          </div>
-                        </div>
-                        <p className="text-gold-500 font-bold text-xs">+{currencySymbol}{log.earn}</p>
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-
-              {profile.status === UserStatus.ONLINE && (myOrders.length === 0 || (profile.uid === 'guest-id' && myOrders.length <= 1)) && pendingIncomingOrders.length > 0 && pendingIncomingOrders[0] && (
-                   <motion.div 
-                   initial={{ scale: 0.9, opacity: 0 }}
-                   animate={{ scale: 1, opacity: 1 }}
-                   className="bg-black border-2 border-gold-500/50 p-6 rounded-[32px] shadow-[0_0_100px_rgba(247,167,10,0.2)] pointer-events-auto relative overflow-hidden"
-                 >
-                     <div className="absolute top-0 right-0 p-4 opacity-10">
-                        <Wrench size={64} className="text-gold-500" />
-                     </div>
-                     <div className="flex items-center gap-4 mb-6 relative z-10">
-                         <div className="w-14 h-14 bg-gold-500 rounded-full flex items-center justify-center relative shadow-lg shadow-gold-500/30">
-                            <Wrench className="text-black" size={28} />
-                            <span className="absolute -top-1 -right-1 flex h-5 w-5">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-gold-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-5 w-5 bg-gold-500 border-2 border-black"></span>
-                            </span>
-                         </div>
-                         <div>
-                             <h4 className="font-bold text-gold-400 uppercase tracking-tighter text-xl leading-tight">Fugo Task Found</h4>
-                             <p className="text-gray-500 text-[10px] font-bold uppercase tracking-[0.2em]">{currencySymbol}{(pendingIncomingOrders[0]?.price || 0).toFixed(2)} Credit Potential</p>
-                         </div>
-                     </div>
-                     <button 
-                        onClick={() => handleAcceptJob(pendingIncomingOrders[0].id)}
-                        className="w-full bg-white text-black font-bold py-5 rounded-3xl flex items-center justify-center gap-3 hover:bg-gold-50 transition-all shadow-2xl relative z-10 active:scale-95"
-                    >
-                        <span className="tracking-widest text-sm">ENGAGE REQUEST</span>
-                        <ChevronRight size={18} />
-                    </button>
-                 </motion.div>
-              )}
           </div>
-      )}
-
-      {/* Customer Action Button */}
-      {profile.role === UserRole.CUSTOMER && (
-        <div className="absolute bottom-32 right-6">
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setIsOrdering(true)}
-            className="w-20 h-20 bg-gold-500 text-black rounded-full shadow-2xl flex items-center justify-center transition-all hover:bg-gold-400 border-4 border-black"
-          >
-            <Plus size={40} />
-          </motion.button>
         </div>
-      )}
 
-      {/* Order Modal */}
+        <div className="flex items-center gap-4">
+          {profile.role === UserRole.DRIVER && (
+            <button 
+              onClick={handleToggleStatus}
+              className={cn(
+                "flex items-center gap-2 px-3 py-1.5 rounded-full border-2 transition-all font-bold text-[10px] uppercase tracking-widest",
+                profile.status === UserStatus.ONLINE 
+                  ? "border-emerald-500 text-emerald-600 bg-emerald-50" 
+                  : "border-gray-200 text-gray-400 bg-gray-50"
+              )}
+            >
+              <div className={cn("w-2 h-2 rounded-full", profile.status === UserStatus.ONLINE ? "bg-emerald-500 animate-pulse" : "bg-gray-300")} />
+              <span>{profile.status}</span>
+            </button>
+          )}
+          <div className="flex items-center gap-3 text-gray-400">
+            <HelpCircle size={22} />
+            <div className="relative">
+              <Bell size={22} />
+              <div className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white" />
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="flex-1 overflow-y-auto no-scrollbar p-6 space-y-8">
+        {profile.role === UserRole.DRIVER ? (
+          /* TECHNICIAN DASHBOARD */
+          <div className="space-y-8 max-w-lg mx-auto">
+            {profile.status === UserStatus.OFFLINE ? (
+              <div className="space-y-6">
+                <div className="bg-emerald-600 p-8 rounded-[40px] text-white shadow-2xl relative overflow-hidden">
+                  <div className="absolute top-0 right-0 p-8 opacity-20">
+                    <TrendingUp size={120} />
+                  </div>
+                  <div className="relative z-10">
+                    <h2 className="text-3xl font-display font-bold italic tracking-tighter uppercase mb-2">High Earning Shift Live!</h2>
+                    <p className="text-emerald-100/70 text-sm font-medium mb-8">Technicians in your area are earning 2.5x more right now.</p>
+                    <button 
+                      onClick={() => setShowSlotBooking(true)}
+                      className="bg-white text-emerald-600 font-bold px-8 py-4 rounded-2xl flex items-center gap-2 hover:bg-emerald-50 transition-all uppercase tracking-widest text-xs"
+                    >
+                      Book & Go Online <ArrowRight size={16} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  {[
+                    { icon: <Wallet className="text-gold-600" />, label: 'Earnings', val: `${currencySymbol}12,500` },
+                    { icon: <Zap className="text-gold-600" />, label: 'Incentives', val: `${currencySymbol}1,250` },
+                    { icon: <Calendar className="text-gold-600" />, label: 'My Shifts', val: '2 Booked' },
+                    { icon: <Gift className="text-gold-600" />, label: 'Referrals', val: 'New' },
+                  ].map((item, i) => (
+                    <div key={i} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center justify-center gap-3 text-center">
+                      <div className="w-10 h-10 bg-gold-50 rounded-xl flex items-center justify-center">{item.icon}</div>
+                      <div>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-none mb-1">{item.label}</p>
+                        <p className="text-sm font-bold text-gray-900">{item.val}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              /* ONLINE TECHNICIAN VIEW */
+              <div className="space-y-8">
+                {activeTechnicianJob ? (
+                  /* ACTIVE TASK FLOW */
+                  <div className="bg-white border-4 border-gold-500 rounded-[40px] shadow-2xl overflow-hidden relative">
+                    <div className="bg-gold-500 p-6 flex justify-between items-center text-black">
+                      <div>
+                        <h3 className="font-display font-bold text-2xl italic tracking-tighter uppercase">MISSION ACTIVE</h3>
+                        <p className="text-[10px] font-bold uppercase tracking-widest opacity-70">Technician ID: {profile.uid.slice(0, 8)}</p>
+                      </div>
+                      <div className="w-12 h-12 bg-black rounded-full flex items-center justify-center">
+                        <Navigation2 size={24} className="text-gold-500" />
+                      </div>
+                    </div>
+                    
+                    <div className="p-8 space-y-8">
+                      <div className="flex items-start gap-4">
+                        <div className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center text-gray-900 shadow-sm">
+                          <MapPin size={24} />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">Target Coordinates</p>
+                          <p className="text-lg font-bold text-gray-900 tracking-tight leading-tight">{activeTechnicianJob.location.address}</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-6 bg-gray-50 p-6 rounded-3xl border border-gray-100">
+                        <div>
+                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">Protocol</p>
+                          <p className="font-bold text-gray-900">{activeTechnicianJob.fuelType}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">Payload</p>
+                          <p className="font-bold text-green-600">{currencySymbol}{activeTechnicianJob.price.toFixed(2)}</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        {activeTechnicianJob.status === OrderStatus.ACCEPTED && (
+                          <button 
+                            onClick={() => updateOrderDeliveryStatus(activeTechnicianJob.id, OrderStatus.DELIVERING)}
+                            className="w-full bg-black text-gold-500 font-bold py-5 rounded-2xl shadow-xl uppercase tracking-widest text-sm flex items-center justify-center gap-3"
+                          >
+                            <Zap size={18} />
+                            Start Service Transit
+                          </button>
+                        )}
+                        {activeTechnicianJob.status === OrderStatus.DELIVERING && (
+                          <button 
+                            onClick={() => updateOrderDeliveryStatus(activeTechnicianJob.id, OrderStatus.COMPLETED)}
+                            className="w-full bg-emerald-600 text-white font-bold py-5 rounded-2xl shadow-xl uppercase tracking-widest text-sm flex items-center justify-center gap-3"
+                          >
+                            <Check size={18} />
+                            Complete Repair Node
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* AVAILABLE JOBS / SEARCHING */
+                  <div className="space-y-8">
+                    <div className="bg-white p-8 rounded-[40px] border border-gold-500/20 shadow-xl text-center relative overflow-hidden group">
+                       <div className="absolute -top-10 -right-10 w-40 h-40 bg-gold-500/5 rounded-full group-hover:bg-gold-500/10 transition-colors" />
+                       <div className="w-20 h-20 bg-gold-500/10 rounded-full flex items-center justify-center mx-auto mb-6 relative">
+                          <div className="absolute inset-0 border-2 border-gold-500 rounded-full animate-ping opacity-30" />
+                          <Wrench size={32} className="text-gold-600" />
+                       </div>
+                       <h3 className="text-gray-900 font-display font-bold text-2xl italic tracking-tighter uppercase mb-2">Searching for Tasks...</h3>
+                       <p className="text-gray-500 text-xs font-bold uppercase tracking-[0.2em] max-w-xs mx-auto mb-8">Maintain your position. High-priority repair requests will materialize here.</p>
+                       <div className="flex justify-center gap-4">
+                          <div className="w-2 h-2 rounded-full bg-gold-500 animate-bounce" />
+                          <div className="w-2 h-2 rounded-full bg-gold-500 animate-bounce delay-100" />
+                          <div className="w-2 h-2 rounded-full bg-gold-500 animate-bounce delay-200" />
+                       </div>
+                    </div>
+
+                    {availableJobs.length > 0 && (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between px-2">
+                           <h4 className="text-gray-900 font-bold uppercase tracking-widest text-[10px]">Open Protocols ({availableJobs.length})</h4>
+                           <ArrowRight size={14} className="text-gray-400" />
+                        </div>
+                        {availableJobs.map(job => (
+                          <motion.div 
+                            initial={{ y: 20, opacity: 0 }}
+                            animate={{ y: 0, opacity: 1 }}
+                            key={job.id} 
+                            className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-between"
+                          >
+                             <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 bg-gold-50 rounded-2xl flex items-center justify-center text-gold-600 font-bold">
+                                  {job.fuelType === 'Standard Repair' ? <Wrench /> : <Hammer />}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-bold text-gray-900 uppercase tracking-tighter">{job.fuelType}</p>
+                                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest truncate max-w-[150px]">{job.location.address}</p>
+                                </div>
+                             </div>
+                             <div className="text-right">
+                                <p className="text-emerald-600 font-bold">{currencySymbol}{job.price.toFixed(0)}</p>
+                                <button 
+                                  onClick={() => handleAcceptJob(job.id)}
+                                  className="text-[9px] font-bold text-white bg-black px-4 py-2 rounded-xl uppercase tracking-widest mt-2 hover:bg-gold-500 hover:text-black transition-all"
+                                >
+                                  Take Job
+                                </button>
+                             </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* PROMO BANNERS */}
+            <div className="relative overflow-hidden group">
+               <motion.div 
+                animate={{ x: `-${bannerIndex * 100}%` }}
+                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                className="flex"
+               >
+                 {BANNERS.map(banner => (
+                   <div key={banner.id} className="min-w-full px-2">
+                     <div className={cn("bg-gradient-to-br p-8 rounded-[40px] text-white shadow-lg relative h-48 flex flex-col justify-center", banner.color)}>
+                        <h4 className="text-2xl font-display font-bold italic tracking-tighter uppercase mb-1">{banner.title}</h4>
+                        <p className="text-white/70 text-sm font-medium">{banner.desc}</p>
+                     </div>
+                   </div>
+                 ))}
+               </motion.div>
+               <div className="flex justify-center gap-2 mt-4">
+                  {BANNERS.map((_, i) => (
+                    <div key={i} className={cn("w-2 h-2 rounded-full transition-all", bannerIndex === i ? "bg-gold-500 w-6" : "bg-gray-200")} />
+                  ))}
+               </div>
+            </div>
+          </div>
+        ) : (
+          /* CUSTOMER DASHBOARD */
+          <div className="space-y-8 max-w-lg mx-auto">
+            {/* SEARCH / CATEGORY */}
+            <div className="space-y-6">
+               <div className="relative">
+                 <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                 <input 
+                  type="search" 
+                  placeholder="Search for repair services..."
+                  className="w-full bg-white border border-gray-100 rounded-3xl py-6 px-16 text-gray-900 font-medium focus:outline-none focus:ring-4 focus:ring-gold-500/5 shadow-sm"
+                 />
+                 <div className="absolute right-4 top-1/2 -translate-y-1/2 bg-gold-500 p-3 rounded-2xl text-black">
+                   <Zap size={20} />
+                 </div>
+               </div>
+
+               <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
+                 {['All', 'Repair', 'Maintenance', 'Emergency', 'Inspection'].map(cat => (
+                   <button 
+                    key={cat}
+                    onClick={() => setSelectedCategory(cat)}
+                    className={cn(
+                      "px-6 py-3 rounded-2xl font-bold text-xs uppercase tracking-widest transition-all whitespace-nowrap",
+                      selectedCategory === cat ? "bg-black text-gold-500 shadow-xl" : "bg-white text-gray-400 border border-gray-100"
+                    )}
+                   >
+                     {cat}
+                   </button>
+                 ))}
+               </div>
+            </div>
+
+            {/* ACTIVE ORDER CARDS FOR CUSTOMER */}
+            {activeCustomerOrders.length > 0 && (
+              <div className="space-y-4">
+                <h4 className="text-gray-900 font-bold uppercase tracking-widest text-[10px] px-2">Active Protocols</h4>
+                {activeCustomerOrders.map(order => (
+                  <motion.div 
+                    initial={{ scale: 0.95, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    key={order.id} 
+                    className="bg-white border-2 border-gold-500 rounded-[30px] p-6 shadow-xl relative overflow-hidden"
+                  >
+                     <div className="flex justify-between items-center mb-6">
+                        <div>
+                          <p className="text-[10px] text-gold-600 font-bold uppercase tracking-[0.2em] mb-1">Order {order.status}</p>
+                          <h4 className="text-xl font-display font-bold italic tracking-tighter uppercase">{order.fuelType}</h4>
+                        </div>
+                        <div className="bg-gold-50 p-2.5 rounded-2xl">
+                          <Clock className="text-gold-600" />
+                        </div>
+                     </div>
+                     <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden mb-6">
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: order.status === OrderStatus.ACCEPTED ? '30%' : '60%' }}
+                          className="h-full bg-gold-500"
+                        />
+                     </div>
+                     <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                        <p>{order.location.address.slice(0, 20)}...</p>
+                        <p>{currencySymbol}{order.price.toFixed(2)}</p>
+                     </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+
+            {/* MAIN ACTION BANNERS */}
+            <div className="grid grid-cols-2 gap-4">
+               <div 
+                onClick={() => setIsOrdering(true)}
+                className="bg-gold-500 p-8 rounded-[40px] text-black shadow-xl cursor-pointer hover:scale-[0.98] transition-all relative overflow-hidden group"
+               >
+                  <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/20 rounded-full group-hover:scale-110 transition-transform" />
+                  <Wrench size={40} className="mb-6" />
+                  <h3 className="text-2xl font-display font-bold italic tracking-tighter uppercase leading-tight">Request Repair</h3>
+               </div>
+               <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 p-4 opacity-10">
+                    <ShieldAlert size={60} />
+                  </div>
+                  <Plus className="text-gray-300 mb-6" size={40} />
+                  <h3 className="text-2xl font-display font-bold italic tracking-tighter uppercase leading-tight text-gray-400">Add Service</h3>
+               </div>
+            </div>
+
+            {/* RECENT / FEATURED SECTION */}
+            <section className="space-y-6">
+               <div className="flex items-center justify-between px-2">
+                 <h4 className="text-gray-900 font-bold uppercase tracking-widest text-[10px]">Top Service Nodes</h4>
+                 <ArrowRight size={14} className="text-gray-400" />
+               </div>
+               <div className="bg-white rounded-[40px] p-6 space-y-6 border border-gray-100 shadow-sm">
+                 {[
+                   { name: 'Central Gachibowli Node', rating: '4.9', time: '12 min', img: 'https://images.unsplash.com/photo-1581092160562-40aa08e78837?w=100&h=100&fit=crop' },
+                   { name: 'Financial Dist. Mobile Node', rating: '4.7', time: '18 min', img: 'https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?w=100&h=100&fit=crop' },
+                 ].map((node, i) => (
+                   <div key={i} className="flex gap-4 items-center group cursor-pointer">
+                      <img src={node.img} alt={node.name} className="w-16 h-16 rounded-2xl object-cover grayscale group-hover:grayscale-0 transition-all shadow-sm" />
+                      <div className="flex-1">
+                        <h5 className="font-bold text-gray-900 leading-tight">{node.name}</h5>
+                        <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-widest text-gray-400 mt-1">
+                          <span className="flex items-center gap-1 text-gold-600"><Zap size={10} fill="currentColor" /> {node.rating}</span>
+                          <span>{node.time}</span>
+                        </div>
+                      </div>
+                      <ChevronRight className="text-gray-200" />
+                   </div>
+                 ))}
+               </div>
+            </section>
+          </div>
+        )}
+      </main>
+
+      {/* Floating Success Indicator (Swiggy Style Snack) */}
+      <AnimatePresence>
+        {successMessage && (
+          <div className="fixed bottom-32 left-0 right-0 flex justify-center z-[200] px-6">
+            <motion.div 
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 20, opacity: 0 }}
+              className="bg-black text-white px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-3 border border-white/10"
+            >
+              <div className="w-6 h-6 bg-gold-500 rounded-full flex items-center justify-center text-black">
+                <Check size={14} />
+              </div>
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em]">{successMessage}</span>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODALS */}
       <AnimatePresence>
         {isOrdering && (
           <>
@@ -608,75 +562,79 @@ export default function Dashboard({ profile }: DashboardProps) {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsOrdering(false)}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm z-[100]"
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200]"
             />
             <motion.div 
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
-              className="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-[40px] p-8 z-[101] border-t border-gold-900/30"
+              className="fixed bottom-0 left-0 right-0 bg-white rounded-t-[50px] p-10 z-[201] shadow-2xl space-y-10"
             >
-              <div className="flex justify-between items-center mb-8">
-                <div>
-                    <h2 className="text-2xl font-display font-bold text-gold-400 italic">REQUEST SERVICE</h2>
-                    <p className="text-xs text-gray-500 uppercase tracking-[0.2em] font-medium mt-1">High-Precision Fugo Repair</p>
-                </div>
-                <button onClick={() => setIsOrdering(false)} className="bg-gray-800 p-2 rounded-full text-gray-400">
-                  <X size={24} />
+              <div className="flex justify-between items-center">
+                <h2 className="text-3xl font-display font-bold italic tracking-tighter uppercase text-gray-900">Establish Repair Node</h2>
+                <button onClick={() => setIsOrdering(false)} className="bg-gray-100 p-3 rounded-full text-gray-900">
+                  <X />
                 </button>
               </div>
 
-              <div className="space-y-6 mb-10">
+              <div className="space-y-8">
                 <div>
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3 block">Service Category</label>
-                  <div className="grid grid-cols-2 gap-3">
-                    {['Standard Repair', 'Maintenance', 'Emergency Fix', 'Inspection'].map(type => (
-                      <button 
-                        key={type}
-                        onClick={() => setOrderForm(prev => ({ ...prev, fuelType: type }))}
+                   <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-4">Protocol Category</label>
+                   <div className="grid grid-cols-2 gap-4">
+                     {['Standard Repair', 'Maintenance', 'Emergency Fix', 'Inspection'].map(cat => (
+                       <button 
+                        key={cat}
+                        onClick={() => setOrderForm(prev => ({ ...prev, fuelType: cat }))}
                         className={cn(
-                          "px-4 py-3 rounded-2xl border transition-all font-bold text-sm text-left",
-                          orderForm.fuelType === type 
-                            ? "bg-gold-500/10 border-gold-500 text-gold-400" 
-                            : "bg-gray-800 border-transparent text-gray-400"
+                          "py-4 rounded-2xl border-2 transition-all font-bold text-sm uppercase px-4 text-left",
+                          orderForm.fuelType === cat ? "border-gold-500 bg-gold-50 text-gold-600" : "border-gray-100 text-gray-400"
                         )}
-                      >
-                        {type}
-                      </button>
-                    ))}
-                  </div>
+                       >
+                         {cat}
+                       </button>
+                     ))}
+                   </div>
                 </div>
 
-                <div>
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3 block">Scale of Operation</label>
-                  <div className="flex items-center gap-6 bg-gray-800 p-6 rounded-3xl justify-center">
-                    <button 
-                        onClick={() => setOrderForm(prev => ({ ...prev, amount: Math.max(1, prev.amount - 1) }))}
-                        className="w-12 h-12 rounded-full border border-gray-600 flex items-center justify-center text-gold-400 hover:bg-gray-700 font-bold"
-                    >-</button>
-                    <div className="text-center">
-                        <span className="text-4xl font-display font-bold text-white block">{orderForm.amount}</span>
-                        <span className="text-[8px] text-gray-500 uppercase font-bold tracking-[0.2em]">Complexity Level</span>
-                    </div>
-                    <button 
-                        onClick={() => setOrderForm(prev => ({ ...prev, amount: prev.amount + 1 }))}
-                        className="w-12 h-12 rounded-full border border-gray-600 flex items-center justify-center text-gold-400 hover:bg-gray-700 font-bold"
-                    >+</button>
-                  </div>
-                </div>
-
-                <div className="bg-gold-950/20 rounded-2xl p-4 flex items-center justify-between border border-gold-900/10">
-                    <span className="text-gray-400 font-medium">Estimated Cost</span>
-                    <span className="text-2xl font-bold text-gold-400">{currencySymbol}{(orderForm.amount * priceMultiplier).toFixed(2)}</span>
+                <div className="bg-gray-50 p-8 rounded-[40px] flex items-center justify-between border border-gray-100">
+                   <div>
+                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">Estimated Cost</p>
+                     <p className="text-4xl font-display font-bold italic tracking-tighter text-gray-900">{currencySymbol}{(orderForm.amount * priceMultiplier).toFixed(0)}</p>
+                   </div>
+                   <button 
+                    onClick={async () => {
+                      const orderId = await createOrder({
+                        fuelType: orderForm.fuelType,
+                        amount: orderForm.amount,
+                        location: profile.location || { lat: 37.42, lng: -122.08, address: "Current Location" },
+                        price: orderForm.amount * priceMultiplier
+                      });
+                      if (orderId || profile.uid === 'guest-id') {
+                        if (profile.uid === 'guest-id') {
+                           setMyOrders(prev => [{
+                             id: `m-${Date.now()}`,
+                             customerId: 'guest-id',
+                             driverId: null,
+                             fuelType: orderForm.fuelType,
+                             amount: orderForm.amount,
+                             location: { lat: 37.42, lng: -122.08, address: "H-Tech Park Node" },
+                             status: OrderStatus.PENDING,
+                             price: orderForm.amount * priceMultiplier,
+                             createdAt: new Date().toISOString(),
+                             updatedAt: new Date().toISOString()
+                           }, ...prev]);
+                        }
+                        setIsOrdering(false);
+                        setSuccessMessage("REPAIR NODE ESTABLISHED");
+                        setTimeout(() => setSuccessMessage(null), 3000);
+                      }
+                    }}
+                    className="bg-gold-500 text-black font-bold px-10 py-5 rounded-3xl shadow-xl shadow-gold-500/20 uppercase tracking-widest text-sm"
+                   >
+                     Submit Node
+                   </button>
                 </div>
               </div>
-
-              <button 
-                onClick={handleCreateOrder}
-                className="w-full bg-gold-500 hover:bg-gold-400 text-black font-bold py-5 rounded-3xl shadow-2xl shadow-gold-500/20 transition-all uppercase tracking-widest"
-              >
-                Confirm Fugo Delivery
-              </button>
             </motion.div>
           </>
         )}
@@ -684,21 +642,16 @@ export default function Dashboard({ profile }: DashboardProps) {
 
       <AnimatePresence>
         {showSlotBooking && (
-          <motion.div 
-            initial={{ opacity: 0, x: '100%' }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: '100%' }}
-            className="fixed inset-0 z-[100]"
-          >
+          <div className="fixed inset-0 z-[300]">
             <SlotBooking 
-              onClose={() => setShowSlotBooking(false)} 
+              onClose={() => setShowSlotBooking(false)}
               onBooked={() => {
                 setShowSlotBooking(false);
-                setSuccessMessage("SHIFTS RESERVED SUCCESSFULLY");
+                setSuccessMessage("SHIFT RESERVED");
                 setTimeout(() => setSuccessMessage(null), 3000);
-              }} 
+              }}
             />
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>
