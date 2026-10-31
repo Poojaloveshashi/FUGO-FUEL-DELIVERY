@@ -46,7 +46,7 @@ service cloud.firestore {
     function isValidOrder(data) {
       return data.keys().hasAll(['customerId', 'status', 'fuelType', 'location']) &&
              data.customerId == request.auth.uid &&
-             data.status in ['pending', 'accepted', 'delivering', 'completed', 'cancelled'] &&
+             data.status in ['pending', 'PENDING', 'accepted', 'ACCEPTED', 'assigned', 'ASSIGNED', 'delivering', 'DELIVERING', 'completed', 'COMPLETED', 'cancelled', 'CANCELLED'] &&
              data.location.lat is number && data.location.lng is number &&
              (!data.has('createdAt') || data.createdAt is timestamp);
     }
@@ -69,14 +69,19 @@ service cloud.firestore {
     match /orders/{orderId} {
       allow get: if isSignedIn();
       allow list: if isSignedIn() && (
-        resource.data.status == 'pending' || 
+        resource.data.status in ['pending', 'PENDING'] || 
         resource.data.customerId == request.auth.uid || 
-        resource.data.driverId == request.auth.uid
+        (resource.data.has('driverId') && resource.data.driverId == request.auth.uid) ||
+        (resource.data.has('driver_id') && resource.data.driver_id == request.auth.uid)
       );
       allow create: if isSignedIn() && isValidOrder(incoming());
       allow update: if isSignedIn() && (
-        (resource.data.customerId == request.auth.uid && incoming().status in ['cancelled']) ||
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'driver')
+        (resource.data.customerId == request.auth.uid && incoming().status in ['cancelled', 'CANCELLED']) ||
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'driver') ||
+        (incoming().has('driverId') && incoming().driverId == request.auth.uid) ||
+        (incoming().has('driver_id') && incoming().driver_id == request.auth.uid) ||
+        (resource.data.has('driverId') && resource.data.driverId == request.auth.uid) ||
+        (resource.data.has('driver_id') && resource.data.driver_id == request.auth.uid)
       );
     }
 

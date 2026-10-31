@@ -10,11 +10,13 @@ export enum UserStatus {
 }
 
 export enum OrderStatus {
-  PENDING = 'pending',
-  ACCEPTED = 'accepted',
-  DELIVERING = 'delivering',
-  COMPLETED = 'completed',
-  CANCELLED = 'cancelled',
+  PENDING = 'PENDING',
+  ASSIGNED = 'ASSIGNED',
+  ACCEPTED = 'ACCEPTED',
+  IN_TRANSIT = 'IN_TRANSIT',
+  DELIVERING = 'DELIVERING',
+  COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED',
 }
 
 export interface Location {
@@ -36,15 +38,25 @@ export interface UserProfile {
 
 export interface Order {
   id: string;
-  customerId: string;
+  customerId?: string;
+  customer_id?: string;
   driverId?: string;
-  status: OrderStatus;
-  fuelType: string;
-  amount: number;
+  driver_id?: string;
+  driver_lat?: number;
+  driver_lng?: number;
+  driverLocation?: { lat: number; lng: number };
+  status: OrderStatus | string;
+  fuelType?: string;
+  fuel_type?: string;
+  amount?: number;
   location: Location;
   price: number;
-  createdAt: any;
-  updatedAt: any;
+  otp?: string;
+  delivery_otp?: string;
+  createdAt?: any;
+  created_at?: any;
+  updatedAt?: any;
+  updated_at?: any;
 }
 
 export interface SOSAlert {

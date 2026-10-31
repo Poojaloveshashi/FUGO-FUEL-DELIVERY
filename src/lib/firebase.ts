@@ -1,8 +1,9 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
+// Safe local mock layer for test trail - zero network dependencies or quota limits
+export const db = {} as any;
+export const auth = {
+  currentUser: null,
+  onAuthStateChanged: (_cb: any) => () => {},
+  signOut: async () => {},
+} as any;
 
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-export const auth = getAuth();
+export default { db, auth };

@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from './lib/firebase';
-import { subscribeToUserProfile } from './services/store';
+import { subscribeToAuth, subscribeToUserProfile } from './services/store';
 import { UserProfile, UserRole, UserStatus } from './types';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -9,7 +7,7 @@ import Dashboard from './pages/Dashboard';
 import ProfilePage from './pages/Profile';
 import Onboarding from './pages/Onboarding';
 import Permissions from './pages/Permissions';
-import EarningsPage from './pages/Earnings';
+import SlotBooking from './components/SlotBooking';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Wrench, 
@@ -31,9 +29,10 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'map' | 'profile' | 'earnings' | 'sos'>('map');
   const [showPermissions, setShowPermissions] = useState(false);
   const [permissionGranted, setPermissionGranted] = useState(false);
+  const [sosStatus, setSosStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (u) => {
+    const unsubAuth = subscribeToAuth((u) => {
       setUser(u);
       setAuthChecked(true);
       if (!u) {
@@ -62,10 +61,7 @@ export default function App() {
   // Not logged in -> Show Login
   if (!user) {
     return <Login onSuccess={() => {
-        // Since we are no longer using guest mode, this would ideally trigger 
-        // a real state refresh if using context or similar.
-        // For now, onAuthStateChanged in App.tsx will handle the state update 
-        // if real Firebase Auth was being used.
+      // User state will automatically update via subscribeToAuth listener
     }} />;
   }
 
@@ -93,7 +89,12 @@ export default function App() {
     >
       {activeTab === 'map' && <Dashboard profile={profile} />}
       {activeTab === 'profile' && <ProfilePage profile={profile} />}
-      {activeTab === 'earnings' && <EarningsPage profile={profile} />}
+      {activeTab === 'earnings' && (
+        <SlotBooking 
+          onClose={() => setActiveTab('map')} 
+          onBooked={() => setActiveTab('map')} 
+        />
+      )}
       {activeTab === 'sos' && (
         <div className="flex flex-col items-center justify-center h-full p-8 text-center space-y-12 bg-black">
            <motion.div 
@@ -116,17 +117,27 @@ export default function App() {
               </div>
            </div>
 
-           <button 
+           {sosStatus && (
+             <div className="bg-red-500/20 border border-red-500/50 text-red-200 px-6 py-3 rounded-2xl text-xs font-mono font-bold">
+               {sosStatus}
+             </div>
+           )}
+
+            <button 
               onClick={async () => {
                 try {
                   if (profile.location) {
                     await createSOS(profile.location);
-                    alert("SOS SIGNAL TRANSMITTED. ELITE UNITS NOTIFIED.");
+                    setSosStatus("SOS SIGNAL TRANSMITTED. ELITE UNITS NOTIFIED.");
+                    setTimeout(() => setSosStatus(null), 5000);
                   } else {
-                    alert("LOCATION NOT AVAILABLE. CHECK PERMISSIONS.");
+                    setSosStatus("LOCATION NOT AVAILABLE. CHECK PERMISSIONS.");
+                    setTimeout(() => setSosStatus(null), 5000);
                   }
                 } catch (err) {
                   console.error("SOS Initiation failed", err);
+                  setSosStatus("SOS TRANSMISSION FAILED. RETRY.");
+                  setTimeout(() => setSosStatus(null), 5000);
                 }
               }}
               className="w-full max-w-sm bg-red-600 hover:bg-black hover:text-red-600 hover:border-red-600 border-4 border-transparent text-white font-extrabold py-8 rounded-[2.5rem] text-2xl shadow-[0_20px_50px_rgba(220,38,38,0.3)] tracking-widest active:scale-95 transition-all group"

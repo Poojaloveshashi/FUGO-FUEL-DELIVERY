@@ -14,7 +14,6 @@ import {
   Gift,
   Home
 } from 'lucide-react';
-import { auth } from '../lib/firebase';
 import { UserStatus } from '../types';
 import { updateProfileStatus } from '../services/store';
 
@@ -22,7 +21,7 @@ import { cn } from '../lib/utils';
 
 interface LayoutProps {
   children: React.ReactNode;
-  activeTab?: 'map' | 'profile' | 'earnings' | 'sos' | 'training' | 'referrals';
+  activeTab?: 'map' | 'profile' | 'earnings' | 'sos';
   setActiveTab?: (tab: any) => void;
   userStatus?: UserStatus;
   userName?: string;

@@ -10,10 +10,11 @@ import {
   MessageSquare,
   HelpCircle,
   Truck,
-  Fuel
+  Fuel,
+  Zap
 } from 'lucide-react';
-import { auth } from '../lib/firebase';
-import { UserProfile } from '../types';
+import { UserProfile, UserRole } from '../types';
+import { switchUserRole, logoutUser } from '../services/store';
 
 interface ProfileProps {
   profile: UserProfile;
@@ -155,12 +156,54 @@ export default function Profile({ profile }: ProfileProps) {
               />
             </section>
 
+            {/* Fast Test Method: 1-Tap Role Switcher */}
+            <div className="p-4 bg-gold-500/10 border border-gold-500/30 rounded-3xl space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Zap size={16} className="text-gold-400" />
+                  <span className="text-xs font-bold text-white uppercase tracking-wider">Fast Test Role Switcher</span>
+                </div>
+                <span className="text-[10px] bg-gold-500 text-black px-2 py-0.5 rounded-full font-bold uppercase">
+                  Current: {profile.role}
+                </span>
+              </div>
+              <p className="text-[11px] text-gray-400">
+                Switch between Driver & Customer modes instantly with 0ms delay.
+              </p>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  onClick={() => switchUserRole(UserRole.DRIVER)}
+                  disabled={profile.role === UserRole.DRIVER}
+                  className={`py-3 px-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                    profile.role === UserRole.DRIVER
+                      ? 'bg-gold-500 text-black font-extrabold cursor-default'
+                      : 'bg-black/60 hover:bg-gold-500/20 text-gray-300 border border-white/10 active:scale-95'
+                  }`}
+                >
+                  <Truck size={14} />
+                  <span>Switch to Driver</span>
+                </button>
+                <button
+                  onClick={() => switchUserRole(UserRole.CUSTOMER)}
+                  disabled={profile.role === UserRole.CUSTOMER}
+                  className={`py-3 px-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                    profile.role === UserRole.CUSTOMER
+                      ? 'bg-gold-500 text-black font-extrabold cursor-default'
+                      : 'bg-black/60 hover:bg-gold-500/20 text-gray-300 border border-white/10 active:scale-95'
+                  }`}
+                >
+                  <Fuel size={14} />
+                  <span>Switch to Customer</span>
+                </button>
+              </div>
+            </div>
+
             <button 
-              onClick={() => auth.signOut()}
-              className="w-full mt-8 bg-red-500/10 hover:bg-red-500/20 text-red-500 font-bold py-5 rounded-3xl flex items-center justify-center gap-3 transition-all border border-red-500/20"
+              onClick={() => logoutUser()}
+              className="w-full mt-4 bg-red-500/10 hover:bg-red-500/20 text-red-500 font-bold py-4 rounded-3xl flex items-center justify-center gap-3 transition-all border border-red-500/20 text-xs uppercase tracking-widest active:scale-95"
             >
-              <LogOut size={20} />
-              <span>Terminate Session</span>
+              <LogOut size={18} />
+              <span>Sign Out / Switch Account</span>
             </button>
           </>
         );
