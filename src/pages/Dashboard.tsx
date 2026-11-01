@@ -33,19 +33,24 @@ import {
   Sparkles,
   RefreshCw,
   CheckCircle2,
-  Settings2
+  Settings2,
+  ExternalLink,
+  Link2,
+  Copy
 } from 'lucide-react';
 import MapView from '../components/Map';
 import SlotBooking from '../components/SlotBooking';
 import OtpVerificationModal from '../components/OtpVerificationModal';
+import CentralSystemArchitecture from '../components/CentralSystemArchitecture';
 import { 
   UserProfile, 
   Order, 
   OrderStatus, 
   UserRole, 
-  UserStatus,
-  SOSAlert,
-  Location 
+  UserStatus, 
+  SOSAlert, 
+  Location,
+  FulfilmentCategory
 } from '../types';
 import { 
   createOrder, 
@@ -68,9 +73,18 @@ import {
   insertSupabaseOrder,
   getEffectiveSupabaseConfig,
   resetSupabaseClient,
+  validateSupabaseAnonKey,
   DEFAULT_SUPABASE_PROJECT_ID,
   DEFAULT_SUPABASE_URL
 } from '../lib/supabase';
+import {
+  CONNECTED_CUSTOMER_APPLET_ID,
+  CONNECTED_CUSTOMER_APPLET_URL,
+  CURRENT_DRIVER_APPLET_ID,
+  subscribeToCrossAppSync,
+  getInitialDeepLinkedOrder,
+  getCustomerAppSyncPrompt
+} from '../lib/crossAppSync';
 import { cn } from '../lib/utils';
 import { 
   requestNotificationPermission, 
@@ -107,6 +121,7 @@ export default function Dashboard({ profile }: DashboardProps) {
   const [hasBookedSlot, setHasBookedSlot] = useState(false);
   const [bannerIndex, setBannerIndex] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [fulfilmentCategory, setFulfilmentCategory] = useState<FulfilmentCategory>('ALL');
 
   // Real-time Incoming Job & Ringtone State
   const [activeIncomingJob, setActiveIncomingJob] = useState<Order | null>(null);
@@ -121,6 +136,9 @@ export default function Dashboard({ profile }: DashboardProps) {
     activeUrl?: string;
     isFromEnv?: boolean;
     source?: string;
+    isInvalidApiKey?: boolean;
+    isRegionKey?: boolean;
+    directDashboardUrl?: string;
   }>(() => {
     const cfg = getEffectiveSupabaseConfig();
     return {
@@ -130,7 +148,8 @@ export default function Dashboard({ profile }: DashboardProps) {
       projectId: cfg.projectId,
       activeUrl: cfg.url,
       isFromEnv: cfg.isFromEnv,
-      source: cfg.source
+      source: cfg.source,
+      directDashboardUrl: `https://supabase.com/dashboard/project/${cfg.projectId}/settings/api`
     };
   });
   const [isCheckingConnection, setIsCheckingConnection] = useState(false);
@@ -140,6 +159,10 @@ export default function Dashboard({ profile }: DashboardProps) {
   const [isPushingSupabaseOrder, setIsPushingSupabaseOrder] = useState(false);
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [orderForOtp, setOrderForOtp] = useState<Order | null>(null);
+  const [dismissKeyWarning, setDismissKeyWarning] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState(false);
+  const [copiedCustomerPrompt, setCopiedCustomerPrompt] = useState(false);
+  const [copiedAppId, setCopiedAppId] = useState(false);
 
   const declinedJobIdsRef = useRef(declinedJobIds);
   declinedJobIdsRef.current = declinedJobIds;
@@ -159,14 +182,18 @@ export default function Dashboard({ profile }: DashboardProps) {
         projectId: res.projectId,
         activeUrl: res.activeUrl,
         isFromEnv: res.isFromEnv,
-        source: res.source
+        source: res.source,
+        isInvalidApiKey: res.isInvalidApiKey,
+        isRegionKey: res.isRegionKey,
+        directDashboardUrl: res.directDashboardUrl
       });
     } catch (err: any) {
       setSupabaseInfo(prev => ({
         ...prev,
         checked: true,
         connected: false,
-        message: err?.message || 'Connection error'
+        message: err?.message || 'Connection error',
+        isInvalidApiKey: true
       }));
     } finally {
       setIsCheckingConnection(false);
@@ -188,10 +215,163 @@ export default function Dashboard({ profile }: DashboardProps) {
     setShowConfigModal(false);
   };
 
+  const handleSimulateCustomerAppOrder = async () => {
+    setIsPushingSupabaseOrder(true);
+    try {
+      const generatedOtp = String(Math.floor(1000 + Math.random() * 9000));
+      const res = await insertSupabaseOrder({
+        service_type: 'FUEL',
+        fuelType: 'High Speed Diesel (Express Generator)',
+        amount: 35,
+        price: 3325,
+        source_app: CONNECTED_CUSTOMER_APPLET_ID,
+        sourceAppUrl: CONNECTED_CUSTOMER_APPLET_URL,
+        customerId: `cust_${CONNECTED_CUSTOMER_APPLET_ID.slice(0, 8)}`,
+        customer_name: 'Customer Portal (App ee2e6063)',
+        otp: generatedOtp,
+        delivery_otp: generatedOtp,
+        location: {
+          lat: (profile.location?.lat || 17.4435) + 0.003,
+          lng: (profile.location?.lng || 78.3582) + 0.002,
+          address: 'WaveRock IT Hub, Financial District, Hyderabad'
+        }
+      });
+      if (res.order) {
+        setSuccessMessage(`ORDER PLACED BY CUSTOMER APP (${CONNECTED_CUSTOMER_APPLET_ID.slice(0, 8)}): OTP ${res.order.otp}`);
+        setTimeout(() => setSuccessMessage(null), 4000);
+        if (profile.status === UserStatus.ONLINE && !activeIncomingJob) {
+          setActiveIncomingJob(res.order);
+          triggerNewOrderNotification();
+        }
+      }
+    } catch (e) {
+      console.warn('Simulate customer order error:', e);
+    } finally {
+      setIsPushingSupabaseOrder(false);
+    }
+  };
+
+  const handleSimulateSpecificAppOrder = async (appType: 'FUEL' | 'REPAIR' | 'SERVICE') => {
+    setIsPushingSupabaseOrder(true);
+    try {
+      const generatedOtp = String(Math.floor(1000 + Math.random() * 9000));
+      let orderPayload: Partial<Order>;
+
+      if (appType === 'FUEL') {
+        orderPayload = {
+          service_type: 'FUEL',
+          serviceType: 'FUEL',
+          fuelType: 'Diesel (Commercial Generator 45L)',
+          amount: 45,
+          price: 4275,
+          source_app: CONNECTED_CUSTOMER_APPLET_ID,
+          sourceAppUrl: CONNECTED_CUSTOMER_APPLET_URL,
+          customer_name: 'Customer (Fuel app)',
+          otp: generatedOtp,
+          delivery_otp: generatedOtp,
+          location: {
+            lat: (profile.location?.lat || 17.4435) + 0.002,
+            lng: (profile.location?.lng || 78.3582) + 0.001,
+            address: 'WaveRock IT Hub, Gachibowli, Hyderabad'
+          }
+        };
+      } else if (appType === 'REPAIR') {
+        orderPayload = {
+          service_type: 'TRANSPORT',
+          serviceType: 'TRANSPORT',
+          job_kind: 'VEHICLE_PICKUP',
+          jobKind: 'VEHICLE_PICKUP',
+          fuelType: 'Repairs & Mechanics (Battery & Jumpstart)',
+          amount: 1,
+          price: 1850,
+          customer_name: 'Customer (Repairs app)',
+          otp: generatedOtp,
+          delivery_otp: generatedOtp,
+          location: {
+            lat: (profile.location?.lat || 17.4435) + 0.004,
+            lng: (profile.location?.lng || 78.3582) - 0.003,
+            address: 'Raheja Mindspace Circle, Madhapur, Hyderabad'
+          }
+        };
+      } else {
+        // SERVICE
+        orderPayload = {
+          service_type: 'TRANSPORT',
+          serviceType: 'TRANSPORT',
+          job_kind: 'VEHICLE_PICKUP',
+          jobKind: 'VEHICLE_PICKUP',
+          fuelType: 'VEHICLE_PICKUP',
+          amount: 1,
+          price: 2100,
+          customer_name: 'Customer (Service app)',
+          otp: generatedOtp,
+          delivery_otp: generatedOtp,
+          location: {
+            lat: (profile.location?.lat || 17.4435) - 0.003,
+            lng: (profile.location?.lng || 78.3582) + 0.004,
+            address: 'Inorbit Mall Valet Zone, Madhapur, Hyderabad'
+          }
+        };
+      }
+
+      const res = await insertSupabaseOrder(orderPayload);
+      if (res.order) {
+        setSuccessMessage(`NEW ORDER ROUTED VIA CENTRAL SYSTEM: ${orderPayload.fuelType}`);
+        setTimeout(() => setSuccessMessage(null), 4000);
+        if (profile.status === UserStatus.ONLINE && !activeIncomingJob) {
+          setActiveIncomingJob(res.order);
+          triggerNewOrderNotification();
+        }
+      }
+    } catch (e) {
+      console.warn('Simulate order error:', e);
+    } finally {
+      setIsPushingSupabaseOrder(false);
+    }
+  };
+
   // Supabase connection check on load
   useEffect(() => {
     handleCheckConnection();
   }, []);
+
+  // Real-time listener for Cross-App Synchronization from Customer App (ee2e6063)
+  useEffect(() => {
+    const unsubCrossApp = subscribeToCrossAppSync(
+      (incomingOrder) => {
+        if (profile.role === UserRole.DRIVER && profile.status === UserStatus.ONLINE) {
+          const hasOngoingTask = myOrdersRef.current.some(
+            o => o.driverId === profile.uid && o.status !== OrderStatus.COMPLETED && o.status !== OrderStatus.CANCELLED
+          );
+          if (!hasOngoingTask && !activeIncomingJobRef.current) {
+            setActiveIncomingJob(incomingOrder);
+            triggerNewOrderNotification();
+            setSuccessMessage(`NEW ORDER RECEIVED FROM CUSTOMER APP (${(incomingOrder.source_app || CONNECTED_CUSTOMER_APPLET_ID).slice(0, 8)})`);
+            setTimeout(() => setSuccessMessage(null), 4000);
+          }
+        }
+      },
+      (updatedOrder) => {
+        setMyOrders(prev => {
+          const idx = prev.findIndex(o => o.id === updatedOrder.id);
+          if (idx !== -1) {
+            const copy = [...prev];
+            copy[idx] = { ...copy[idx], ...updatedOrder };
+            return copy;
+          }
+          return prev;
+        });
+      }
+    );
+
+    const { orderId } = getInitialDeepLinkedOrder();
+    if (orderId) {
+      setSuccessMessage(`DEEP LINK CONNECTED: ORDER #${orderId.slice(-6)}`);
+      setTimeout(() => setSuccessMessage(null), 3500);
+    }
+
+    return () => unsubCrossApp();
+  }, [profile.role, profile.status, profile.uid]);
 
   // Real-time location simulation for Driver
   useEffect(() => {
@@ -314,35 +494,63 @@ export default function Dashboard({ profile }: DashboardProps) {
   };
 
   // Push a live test order into Supabase
-  const handlePushTestSupabaseOrder = async () => {
+  // Push a live test order into Supabase with service_type 'FUEL' or 'TRANSPORT'
+  const handlePushTestSupabaseOrder = async (targetService: 'FUEL' | 'TRANSPORT' = 'FUEL', transportKind: 'VEHICLE_PICKUP' | 'VEHICLE_RETURN' = 'VEHICLE_PICKUP') => {
     setIsPushingSupabaseOrder(true);
     try {
-      const hyderabadFuelDispatches = [
-        { type: 'Diesel (Commercial Generator)', amt: 35, price: 3325, addr: 'DLF Cybercity, Gachibowli, Hyderabad' },
-        { type: 'High Speed Diesel (Fleet)', amt: 50, price: 4750, addr: 'WaveRock SEZ, Financial District, Hyderabad' },
-        { type: 'Petrol (Speed 95)', amt: 25, price: 2650, addr: 'Raheja Mindspace, Madhapur, Hyderabad' },
-        { type: 'Diesel (High Density)', amt: 40, price: 3800, addr: 'Aparna Sarovar, Nallagandla, Hyderabad' },
-      ];
-      const pick = hyderabadFuelDispatches[Math.floor(Math.random() * hyderabadFuelDispatches.length)];
-      
-      const res = await insertSupabaseOrder({
-        fuelType: pick.type,
-        amount: pick.amt,
-        price: pick.price,
-        location: {
-          lat: (profile.location?.lat || 17.4400) + (Math.random() - 0.5) * 0.008,
-          lng: (profile.location?.lng || 78.3489) + (Math.random() - 0.5) * 0.008,
-          address: pick.addr
-        }
-      });
+      if (targetService === 'TRANSPORT') {
+        const res = await insertSupabaseOrder({
+          service_type: 'TRANSPORT',
+          job_kind: transportKind,
+          fuelType: transportKind, // For TRANSPORT jobs show job_kind (VEHICLE_PICKUP or VEHICLE_RETURN) as the job title
+          amount: 1,
+          price: transportKind === 'VEHICLE_PICKUP' ? 1850 : 2100,
+          location: {
+            lat: (profile.location?.lat || 17.4400) + (Math.random() - 0.5) * 0.008,
+            lng: (profile.location?.lng || 78.3489) + (Math.random() - 0.5) * 0.008,
+            address: transportKind === 'VEHICLE_PICKUP' 
+              ? 'Aparna CyberLife, Nallagandla, Hyderabad' 
+              : 'Inorbit Mall Valet Zone, Madhapur, Hyderabad'
+          }
+        });
 
-      if (res.order) {
-        setSuccessMessage("NEW DISPATCH PUSHED TO SUPABASE (status: PENDING)");
-        setTimeout(() => setSuccessMessage(null), 4000);
-        // If driver is online, trigger incoming dialog
-        if (profile.status === UserStatus.ONLINE && !activeIncomingJob) {
-          setActiveIncomingJob(res.order);
-          triggerNewOrderNotification();
+        if (res.order) {
+          setSuccessMessage(`NEW TRANSPORT DISPATCH PUSHED: ${transportKind}`);
+          setTimeout(() => setSuccessMessage(null), 4000);
+          if (profile.status === UserStatus.ONLINE && !activeIncomingJob) {
+            setActiveIncomingJob(res.order);
+            triggerNewOrderNotification();
+          }
+        }
+      } else {
+        const hyderabadFuelDispatches = [
+          { type: 'Diesel (Commercial Generator)', amt: 35, price: 3325, addr: 'DLF Cybercity, Gachibowli, Hyderabad' },
+          { type: 'High Speed Diesel (Fleet)', amt: 50, price: 4750, addr: 'WaveRock SEZ, Financial District, Hyderabad' },
+          { type: 'Petrol (Speed 95)', amt: 25, price: 2650, addr: 'Raheja Mindspace, Madhapur, Hyderabad' },
+          { type: 'Diesel (High Density)', amt: 40, price: 3800, addr: 'Aparna Sarovar, Nallagandla, Hyderabad' },
+        ];
+        const pick = hyderabadFuelDispatches[Math.floor(Math.random() * hyderabadFuelDispatches.length)];
+        
+        const res = await insertSupabaseOrder({
+          service_type: 'FUEL', // Explicitly set service_type 'FUEL' in insertSupabaseOrder
+          fuelType: pick.type,
+          amount: pick.amt,
+          price: pick.price,
+          location: {
+            lat: (profile.location?.lat || 17.4400) + (Math.random() - 0.5) * 0.008,
+            lng: (profile.location?.lng || 78.3489) + (Math.random() - 0.5) * 0.008,
+            address: pick.addr
+          }
+        });
+
+        if (res.order) {
+          setSuccessMessage("NEW FUEL DISPATCH PUSHED (service_type: 'FUEL')");
+          setTimeout(() => setSuccessMessage(null), 4000);
+          // If driver is online, trigger incoming dialog
+          if (profile.status === UserStatus.ONLINE && !activeIncomingJob) {
+            setActiveIncomingJob(res.order);
+            triggerNewOrderNotification();
+          }
         }
       }
     } catch (err) {
@@ -361,19 +569,28 @@ export default function Dashboard({ profile }: DashboardProps) {
       return;
     }
 
-    // Realistic simulated fuel dispatch with ringtone
+    // Realistic simulated dispatch (alternates between FUEL and TRANSPORT with VEHICLE_PICKUP / VEHICLE_RETURN)
+    const isTransport = Math.random() > 0.5;
+    const kind: 'VEHICLE_PICKUP' | 'VEHICLE_RETURN' = Math.random() > 0.5 ? 'VEHICLE_PICKUP' : 'VEHICLE_RETURN';
+
     const mockOrder: Order = {
       id: `ord_supa_${Date.now().toString().slice(-4)}`,
       customerId: 'cust_cyberabad',
       status: OrderStatus.PENDING,
-      fuelType: 'Emergency Diesel Handover (50L)',
-      amount: 50,
+      service_type: isTransport ? 'TRANSPORT' : 'FUEL',
+      serviceType: isTransport ? 'TRANSPORT' : 'FUEL',
+      job_kind: isTransport ? kind : undefined,
+      jobKind: isTransport ? kind : undefined,
+      fuelType: isTransport ? kind : 'Emergency Diesel Handover (50L)',
+      amount: isTransport ? 1 : 50,
       location: {
         lat: (profile.location?.lat || 17.4400) + 0.005,
         lng: (profile.location?.lng || 78.3489) + 0.004,
-        address: 'Cyber Towers Main Gate, HITEC City, Hyderabad'
+        address: isTransport 
+          ? (kind === 'VEHICLE_PICKUP' ? 'Cyber Gateway Parking P1, HITEC City, Hyderabad' : 'Raheja Mindspace Hub, Madhapur, Hyderabad')
+          : 'Cyber Towers Main Gate, HITEC City, Hyderabad'
       },
-      price: isIndia ? 4750 : 65.00,
+      price: isIndia ? (isTransport ? 1950 : 4750) : 65.00,
       otp: '4821',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -418,6 +635,14 @@ export default function Dashboard({ profile }: DashboardProps) {
          o.status !== OrderStatus.COMPLETED &&
          o.status !== 'completed'
   );
+
+  const displayedAvailableJobs = availableJobs.filter(job => {
+    if (fulfilmentCategory === 'ALL') return true;
+    const sType = (job.service_type || job.serviceType || 'FUEL').toUpperCase();
+    if (fulfilmentCategory === 'DELIVERY') return sType === 'FUEL';
+    if (fulfilmentCategory === 'MECHANICS') return sType === 'MAINTENANCE' || (job.fuelType && job.fuelType.toLowerCase().includes('repair'));
+    return true;
+  });
 
   // Direct integration of:
   // void sendLocationPing(String orderId, double lat, double lng)
@@ -590,6 +815,30 @@ export default function Dashboard({ profile }: DashboardProps) {
                         </div>
                       </div>
 
+                      {/* Customer Source App Connection Badge */}
+                      <div className="flex items-center justify-between p-3.5 bg-blue-50/80 border border-blue-200 rounded-2xl text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
+                          <div>
+                            <span className="text-[10px] text-gray-500 block uppercase font-bold tracking-wider">
+                              Order Channel
+                            </span>
+                            <span className="text-gray-900 font-bold">
+                              Customer Portal ({activeTechnicianJob.source_app ? activeTechnicianJob.source_app.slice(0, 8) : CONNECTED_CUSTOMER_APPLET_ID.slice(0, 8)})
+                            </span>
+                          </div>
+                        </div>
+                        <a
+                          href={activeTechnicianJob.sourceAppUrl || CONNECTED_CUSTOMER_APPLET_URL}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[10px] font-bold flex items-center gap-1 shadow-sm transition-all"
+                        >
+                          <span>Open App</span>
+                          <ExternalLink size={10} />
+                        </a>
+                      </div>
+
                       {/* Live GPS Ping Telemetry Panel */}
                       <div className="bg-gradient-to-br from-neutral-900 to-black text-white p-5 rounded-3xl border border-gold-500/30 space-y-3 shadow-lg">
                         <div className="flex items-center justify-between">
@@ -737,22 +986,40 @@ export default function Dashboard({ profile }: DashboardProps) {
                          Real-time channel active. Incoming fuel delivery dispatches stream automatically with audible ringtone.
                        </p>
                        
-                       <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                       <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-2.5">
                          <button
                            onClick={handleSimulateIncomingJob}
-                           className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 bg-black hover:bg-gold-500 text-gold-400 hover:text-black rounded-2xl font-bold text-xs uppercase tracking-wider transition-all active:scale-95 shadow-md"
+                           className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-black hover:bg-gold-500 text-gold-400 hover:text-black rounded-2xl font-bold text-xs uppercase tracking-wider transition-all active:scale-95 shadow-md"
                          >
-                           <Volume2 size={16} className="animate-pulse" />
-                           <span>Simulate Dispatch (Ringtone + Dialog)</span>
+                           <Volume2 size={15} className="animate-pulse" />
+                           <span>Simulate Ringtone</span>
                          </button>
 
                          <button
-                           onClick={handlePushTestSupabaseOrder}
+                           onClick={() => handlePushTestSupabaseOrder('FUEL')}
                            disabled={isPushingSupabaseOrder}
-                           className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-bold text-xs uppercase tracking-wider transition-all active:scale-95 shadow-md disabled:opacity-50"
+                           className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-bold text-xs uppercase tracking-wider transition-all active:scale-95 shadow-md disabled:opacity-50"
                          >
-                           <Sparkles size={16} />
-                           <span>{isPushingSupabaseOrder ? 'Pushing to Supabase...' : 'Push Order to Supabase'}</span>
+                           <Sparkles size={15} />
+                           <span>+ Fuel Order</span>
+                         </button>
+
+                         <button
+                           onClick={() => handlePushTestSupabaseOrder('TRANSPORT', 'VEHICLE_PICKUP')}
+                           disabled={isPushingSupabaseOrder}
+                           className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-purple-700 hover:bg-purple-600 text-white rounded-2xl font-bold text-xs uppercase tracking-wider transition-all active:scale-95 shadow-md disabled:opacity-50"
+                         >
+                           <Truck size={15} />
+                           <span>+ Transport (Pickup)</span>
+                         </button>
+
+                         <button
+                           onClick={() => handlePushTestSupabaseOrder('TRANSPORT', 'VEHICLE_RETURN')}
+                           disabled={isPushingSupabaseOrder}
+                           className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-indigo-700 hover:bg-indigo-600 text-white rounded-2xl font-bold text-xs uppercase tracking-wider transition-all active:scale-95 shadow-md disabled:opacity-50"
+                         >
+                           <Truck size={15} />
+                           <span>+ Transport (Return)</span>
                          </button>
                        </div>
 
@@ -763,16 +1030,18 @@ export default function Dashboard({ profile }: DashboardProps) {
                        </div>
                     </div>
 
-                    {availableJobs.length > 0 && (
+                    {displayedAvailableJobs.length > 0 && (
                       <div className="space-y-4">
                         <div className="flex items-center justify-between px-2">
                            <h4 className="text-gray-900 font-bold uppercase tracking-widest text-[10px] flex items-center gap-2">
                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                             Incoming Dispatch Requests ({availableJobs.length})
+                             Incoming Dispatch Requests ({displayedAvailableJobs.length})
                            </h4>
-                           <span className="text-[10px] text-gray-400 font-mono">status = PENDING</span>
+                           <span className="text-[10px] text-gray-400 font-mono">
+                             {fulfilmentCategory !== 'ALL' ? `FULFILMENT: ${fulfilmentCategory}` : 'status = PENDING'}
+                           </span>
                         </div>
-                        {availableJobs.map(job => (
+                        {displayedAvailableJobs.map(job => (
                           <motion.div 
                             initial={{ y: 20, opacity: 0 }}
                             animate={{ y: 0, opacity: 1 }}
@@ -791,6 +1060,15 @@ export default function Dashboard({ profile }: DashboardProps) {
                                     <span className="bg-amber-100 text-amber-800 text-[8px] font-bold px-2 py-0.5 rounded-full uppercase">
                                       PENDING
                                     </span>
+                                    {job.service_type === 'TRANSPORT' ? (
+                                      <span className="bg-purple-100 text-purple-700 text-[8px] font-bold px-2 py-0.5 rounded-full uppercase">
+                                        TRANSPORT
+                                      </span>
+                                    ) : (
+                                      <span className="bg-emerald-100 text-emerald-700 text-[8px] font-bold px-2 py-0.5 rounded-full uppercase">
+                                        FUEL
+                                      </span>
+                                    )}
                                   </div>
                                   <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest truncate max-w-[160px]">
                                     {job.location.address}
@@ -918,6 +1196,22 @@ export default function Dashboard({ profile }: DashboardProps) {
                         <p>{currencySymbol}{order.price.toFixed(2)}</p>
                      </div>
 
+                     {/* 4-Digit Delivery Verification OTP */}
+                     {(order.otp || order.delivery_otp) && (
+                       <div className="mt-3 flex items-center justify-between bg-gold-50 border border-gold-200/80 px-3.5 py-2.5 rounded-2xl">
+                         <div className="flex items-center gap-2">
+                           <KeyRound size={15} className="text-gold-600" />
+                           <span className="text-[10px] font-bold uppercase tracking-wider text-gray-700">Delivery OTP:</span>
+                         </div>
+                         <div className="flex items-center gap-1.5">
+                           <span className="font-mono text-base font-black tracking-widest text-gold-950 bg-white px-2.5 py-0.5 rounded-lg border border-gold-300 shadow-sm">
+                             {order.otp || order.delivery_otp}
+                           </span>
+                           <span className="text-[9px] text-gray-500 font-medium">Share with driver</span>
+                         </div>
+                       </div>
+                     )}
+
                      {/* Live Driver GPS Location Ping */}
                      {(order.driver_lat || order.driver_lng) && (
                        <div className="mt-3 flex items-center justify-between bg-emerald-50 border border-emerald-200/70 px-3.5 py-2 rounded-2xl text-[10px] font-semibold text-emerald-800">
@@ -1030,7 +1324,7 @@ export default function Dashboard({ profile }: DashboardProps) {
                 <div>
                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-4">Protocol Category</label>
                    <div className="grid grid-cols-2 gap-4">
-                     {['Standard Repair', 'Maintenance', 'Emergency Fix', 'Inspection'].map(cat => (
+                     {['Express Fuel Delivery', 'High Speed Diesel (50L)', 'Speed 95 Petrol', 'Transport Vehicle Pickup'].map(cat => (
                        <button 
                         key={cat}
                         onClick={() => setOrderForm(prev => ({ ...prev, fuelType: cat }))}
@@ -1052,21 +1346,24 @@ export default function Dashboard({ profile }: DashboardProps) {
                    </div>
                    <button 
                     onClick={async () => {
+                      const isTransport = orderForm.fuelType.includes('Transport');
                       const orderId = await createOrder({
-                        fuelType: orderForm.fuelType,
+                        fuelType: isTransport ? 'VEHICLE_PICKUP' : orderForm.fuelType,
+                        service_type: isTransport ? 'TRANSPORT' : 'FUEL',
+                        job_kind: isTransport ? 'VEHICLE_PICKUP' : undefined,
                         amount: orderForm.amount,
-                        location: profile.location || { lat: 17.3850, lng: 78.4867, address: "Hyderabad, Telangana" },
+                        location: profile.location || { lat: 17.4435, lng: 78.3582, address: "Gachibowli Circle, Hyderabad" },
                         price: orderForm.amount * priceMultiplier
                       });
                       if (orderId) {
                         setIsOrdering(false);
-                        setSuccessMessage("REPAIR NODE ESTABLISHED");
-                        setTimeout(() => setSuccessMessage(null), 3000);
+                        setSuccessMessage("ORDER PLACED (PENDING): 4-DIGIT OTP GENERATED & REAL-TIME SYNC ACTIVE");
+                        setTimeout(() => setSuccessMessage(null), 4000);
                       }
                     }}
                     className="bg-gold-500 text-black font-bold px-10 py-5 rounded-3xl shadow-xl shadow-gold-500/20 uppercase tracking-widest text-sm"
                    >
-                     Submit Node
+                     Place Order (Live Sync)
                    </button>
                 </div>
               </div>
@@ -1182,16 +1479,65 @@ export default function Dashboard({ profile }: DashboardProps) {
                 </div>
 
                 <div>
-                  <label className="block text-gray-400 uppercase tracking-wider text-[10px] font-bold mb-1">
-                    Supabase Anon Key
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-gray-400 uppercase tracking-wider text-[10px] font-bold">
+                      Supabase Anon Key
+                    </label>
+                    <a
+                      href={supabaseInfo.directDashboardUrl || `https://supabase.com/dashboard/project/${DEFAULT_SUPABASE_PROJECT_ID}/settings/api`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] text-gold-400 hover:text-gold-300 font-bold flex items-center gap-1"
+                    >
+                      <span>Find Key in Dashboard</span>
+                      <ExternalLink size={10} />
+                    </a>
+                  </div>
                   <input
                     type="text"
                     value={customKey}
                     onChange={(e) => setCustomKey(e.target.value)}
-                    placeholder="ap-southeast-1 or eyJhbGci..."
-                    className="w-full bg-black/60 border border-white/20 focus:border-gold-500 rounded-xl px-3.5 py-2.5 text-white font-mono text-xs outline-none transition-colors"
+                    placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..."
+                    className={cn(
+                      "w-full bg-black/60 border rounded-xl px-3.5 py-2.5 text-white font-mono text-xs outline-none transition-colors",
+                      validateSupabaseAnonKey(customKey).isRegionCode 
+                        ? "border-amber-500/80 focus:border-amber-400" 
+                        : "border-white/20 focus:border-gold-500"
+                    )}
                   />
+
+                  {/* Real-time Validation Feedback */}
+                  {(() => {
+                    const validation = validateSupabaseAnonKey(customKey);
+                    if (validation.isRegionCode) {
+                      return (
+                        <div className="mt-2 p-2.5 bg-amber-950/70 border border-amber-500/50 rounded-xl text-amber-300 text-[11px] flex items-start gap-2">
+                          <AlertTriangle size={14} className="text-amber-400 shrink-0 mt-0.5" />
+                          <div>
+                            <strong className="block text-amber-200 uppercase text-[10px] tracking-wider mb-0.5">
+                              AWS Region Entered Instead of API Key
+                            </strong>
+                            <p className="text-gray-300 text-[11px] leading-tight">
+                              <code>"{customKey}"</code> is your cloud datacenter region. To resolve, copy the 3-part <strong>anon public</strong> key starting with <code className="text-gold-300 font-mono">eyJhbGci...</code> from Project Settings &gt; API.
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    }
+                    if (validation.isValid && validation.formatType === 'jwt') {
+                      return (
+                        <div className="mt-2 p-2 bg-emerald-950/70 border border-emerald-500/50 rounded-xl text-emerald-300 text-[11px] flex items-center gap-2">
+                          <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
+                          <span>Valid JWT Anon Key format detected. Ready to connect!</span>
+                        </div>
+                      );
+                    }
+                    return (
+                      <span className="text-[10px] text-gray-500 mt-1 block">
+                        Must be your Supabase <strong>anon public</strong> key (starts with <code className="text-gray-400 font-mono">eyJ...</code>)
+                      </span>
+                    );
+                  })()}
                 </div>
               </div>
 

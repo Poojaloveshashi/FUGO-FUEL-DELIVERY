@@ -7,14 +7,22 @@ import {
   OrderStatus,
   Location 
 } from '../types';
+import { RealtimeChannel } from '@supabase/supabase-js';
 import {
   acceptSupabaseOrderToInTransit,
   completeSupabaseOrderWithOtp,
   subscribeToSupabasePendingOrders,
   insertSupabaseOrder,
   getSupabaseClient,
-  normalizeSupabaseOrder
+  normalizeSupabaseOrder,
+  placeOrderWithRealtimeSubscription,
+  subscribeToOrderRealtime
 } from '../lib/supabase';
+import {
+  broadcastCrossAppOrder,
+  CONNECTED_CUSTOMER_APPLET_ID,
+  CONNECTED_CUSTOMER_APPLET_URL
+} from '../lib/crossAppSync';
 
 export enum OperationType {
   CREATE = 'create',
@@ -72,12 +80,14 @@ const PROFILE_STORAGE_KEY_PREFIX = 'fugo_profile_';
 const ORDERS_STORAGE_KEY = 'fugo_local_orders';
 const SOS_STORAGE_KEY = 'fugo_local_sos_alerts';
 
-// Realistic Hyderabad Delivery Orders for Fuel Delivery Drivers
+// Realistic Hyderabad Delivery Orders for Fuel Delivery & Transport Drivers
 const SEED_HYDERABAD_ORDERS: Order[] = [
   {
     id: 'ord_hyd_001',
     customerId: 'cust_gachibowli_01',
     status: OrderStatus.PENDING,
+    service_type: 'FUEL',
+    serviceType: 'FUEL',
     fuelType: 'Diesel (Commercial Generator)',
     amount: 35,
     price: 3325,
@@ -93,21 +103,27 @@ const SEED_HYDERABAD_ORDERS: Order[] = [
     id: 'ord_hyd_002',
     customerId: 'cust_madhapur_02',
     status: OrderStatus.PENDING,
-    fuelType: 'Petrol (Speed 95)',
-    amount: 25,
-    price: 2650,
+    service_type: 'TRANSPORT',
+    serviceType: 'TRANSPORT',
+    job_kind: 'VEHICLE_PICKUP',
+    jobKind: 'VEHICLE_PICKUP',
+    fuelType: 'VEHICLE_PICKUP', // For TRANSPORT jobs show job_kind (VEHICLE_PICKUP) as job title
+    amount: 1,
+    price: 1850,
     location: {
       lat: 17.4375,
       lng: 78.3842,
       address: 'Raheja Mindspace, Madhapur, Hyderabad'
     },
-    createdAt: new Date(Date.now() - 10 * 60000).toISOString(),
-    updatedAt: new Date(Date.now() - 10 * 60000).toISOString(),
+    createdAt: new Date(Date.now() - 8 * 60000).toISOString(),
+    updatedAt: new Date(Date.now() - 8 * 60000).toISOString(),
   },
   {
     id: 'ord_hyd_003',
     customerId: 'cust_nanakramguda_03',
     status: OrderStatus.PENDING,
+    service_type: 'FUEL',
+    serviceType: 'FUEL',
     fuelType: 'High Speed Diesel',
     amount: 50,
     price: 4750,
@@ -123,9 +139,13 @@ const SEED_HYDERABAD_ORDERS: Order[] = [
     id: 'ord_hyd_004',
     customerId: 'cust_nallagandla_04',
     status: OrderStatus.PENDING,
-    fuelType: 'Diesel (High Density)',
-    amount: 40,
-    price: 3800,
+    service_type: 'TRANSPORT',
+    serviceType: 'TRANSPORT',
+    job_kind: 'VEHICLE_RETURN',
+    jobKind: 'VEHICLE_RETURN',
+    fuelType: 'VEHICLE_RETURN', // For TRANSPORT jobs show job_kind (VEHICLE_RETURN) as job title
+    amount: 1,
+    price: 2100,
     location: {
       lat: 17.4820,
       lng: 78.3090,
@@ -480,32 +500,84 @@ function notifyOrderListeners() {
 
 export async function createOrder(order: Partial<Order>): Promise<string | null> {
   const current = getCurrentUser();
-  const customerId = current?.uid || 'guest_customer';
-  const orderId = `ord_hyd_${Date.now()}`;
+  const customerId = order.customerId || order.customer_id || current?.uid || 'cust_gachibowli';
+  const orderId = order.id || `ord_supa_${Date.now()}`;
 
-  const newOrder: Order = {
-    id: orderId,
-    customerId,
-    status: OrderStatus.PENDING,
-    fuelType: order.fuelType || 'High Speed Diesel',
-    amount: order.amount || 25,
-    price: order.price || 2400,
-    location: order.location || {
-      lat: 17.4401,
-      lng: 78.3489,
-      address: 'Gachibowli, Hyderabad'
-    },
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    ...order
-  };
+  try {
+    // When an order is placed:
+    // 1. Insert it into the orders table with status 'PENDING'
+    // 2. Generate a 4-digit OTP
+    // 3. Subscribe to real-time changes on that order
+    const res = await placeOrderWithRealtimeSubscription(
+      {
+        ...order,
+        id: orderId,
+        customerId,
+        customer_id: customerId,
+        service_type: order.service_type || order.serviceType || 'FUEL',
+      },
+      (updatedOrder) => {
+        // Real-time updates when driver accepts, updates status, pings coordinates, or completes
+        const orders = getStoredOrders();
+        const idx = orders.findIndex(o => o.id === updatedOrder.id);
+        if (idx !== -1) {
+          orders[idx] = { ...orders[idx], ...updatedOrder };
+        } else {
+          orders.unshift(updatedOrder);
+        }
+        saveStoredOrders(orders);
+        notifyOrderListeners();
+      }
+    );
 
-  const orders = getStoredOrders();
-  orders.unshift(newOrder);
-  saveStoredOrders(orders);
-  notifyOrderListeners();
+    const placed = res.order;
+    const orders = getStoredOrders();
+    const existingIdx = orders.findIndex(o => o.id === placed.id);
+    if (existingIdx !== -1) {
+      orders[existingIdx] = placed;
+    } else {
+      orders.unshift(placed);
+    }
+    saveStoredOrders(orders);
+    notifyOrderListeners();
+    broadcastCrossAppOrder('NEW_ORDER', placed);
 
-  return orderId;
+    return placed.id;
+  } catch (err) {
+    console.warn('[Store] createOrder network fallback:', err);
+    const otp4Digit = String(Math.floor(1000 + Math.random() * 9000));
+    const fallbackOrder: Order = {
+      id: orderId,
+      customerId,
+      customer_id: customerId,
+      status: OrderStatus.PENDING,
+      service_type: order.service_type || order.serviceType || 'FUEL',
+      serviceType: order.service_type || order.serviceType || 'FUEL',
+      fuelType: order.fuelType || 'Express Diesel Handover (50L)',
+      amount: order.amount || 25,
+      price: order.price || 2400,
+      location: order.location || {
+        lat: 17.4401,
+        lng: 78.3489,
+        address: 'Gachibowli, Hyderabad'
+      },
+      otp: otp4Digit,
+      delivery_otp: otp4Digit,
+      source_app: order.source_app || CONNECTED_CUSTOMER_APPLET_ID,
+      sourceAppUrl: CONNECTED_CUSTOMER_APPLET_URL,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      ...order
+    };
+
+    const orders = getStoredOrders();
+    orders.unshift(fallbackOrder);
+    saveStoredOrders(orders);
+    notifyOrderListeners();
+    broadcastCrossAppOrder('NEW_ORDER', fallbackOrder);
+
+    return orderId;
+  }
 }
 
 /**
@@ -529,6 +601,7 @@ export async function acceptJob(orderId: string, driverId: string): Promise<void
     };
     saveStoredOrders(orders);
     notifyOrderListeners();
+    broadcastCrossAppOrder('ORDER_ACCEPTED', orders[idx]);
   }
 
   // Live Supabase update: updates orders table status to 'IN_TRANSIT'
@@ -574,6 +647,7 @@ export async function completeOrderWithOtp(
     };
     saveStoredOrders(orders);
     notifyOrderListeners();
+    broadcastCrossAppOrder('ORDER_COMPLETED', orders[idx]);
   }
 
   return { success: true };
@@ -626,6 +700,7 @@ export async function sendLocationPing(orderId: string, lat: number, lng: number
     };
     saveStoredOrders(orders);
     notifyOrderListeners();
+    broadcastCrossAppOrder('LOCATION_PING', orders[idx]);
   }
 }
 
@@ -763,8 +838,77 @@ export function subscribeToCustomerOrders(customerId: string, callback: (orders:
   const listener = () => emitCustomer();
   orderListeners.add(listener);
 
+  let channel: RealtimeChannel | null = null;
+  try {
+    const client = getSupabaseClient();
+    // 1. Initial fetch from Supabase
+    client
+      .from('orders')
+      .select('*')
+      .eq('customer_id', customerId)
+      .then(({ data, error }) => {
+        if (!error && data && data.length > 0) {
+          const stored = getStoredOrders();
+          let changed = false;
+          data.forEach((row: any) => {
+            const order = normalizeSupabaseOrder(row);
+            const idx = stored.findIndex(e => e.id === order.id);
+            if (idx === -1) {
+              stored.unshift(order);
+              changed = true;
+            } else {
+              stored[idx] = { ...stored[idx], ...order };
+              changed = true;
+            }
+          });
+          if (changed) {
+            saveStoredOrders(stored);
+            notifyOrderListeners();
+          }
+        }
+      });
+
+    // 2. Real-time updates for this customer's orders
+    const channelName = `realtime-cust-${customerId}-${Date.now()}`;
+    channel = client
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'orders',
+          filter: `customer_id=eq.${customerId}`,
+        },
+        (payload) => {
+          const { new: newRecord } = payload as any;
+          if (newRecord) {
+            const order = normalizeSupabaseOrder(newRecord);
+            const stored = getStoredOrders();
+            const idx = stored.findIndex(e => e.id === order.id);
+            if (idx === -1) {
+              stored.unshift(order);
+            } else {
+              stored[idx] = { ...stored[idx], ...order };
+            }
+            saveStoredOrders(stored);
+            notifyOrderListeners();
+          }
+        }
+      )
+      .subscribe();
+  } catch (err) {
+    console.warn('[Supabase Realtime] Customer subscription notice:', err);
+  }
+
   return () => {
     orderListeners.delete(listener);
+    if (channel) {
+      try {
+        const client = getSupabaseClient();
+        client.removeChannel(channel);
+      } catch (e) {}
+    }
   };
 }
 
@@ -791,8 +935,78 @@ export function subscribeToMyActiveDeliveries(driverId: string, callback: (order
   const listener = () => emitActive();
   orderListeners.add(listener);
 
+  let channel: RealtimeChannel | null = null;
+  try {
+    const client = getSupabaseClient();
+    // 1. Initial fetch from Supabase
+    client
+      .from('orders')
+      .select('*')
+      .eq('driver_id', driverId)
+      .in('status', ['IN_TRANSIT', 'ASSIGNED', 'ACCEPTED', 'DELIVERING'])
+      .then(({ data, error }) => {
+        if (!error && data && data.length > 0) {
+          const stored = getStoredOrders();
+          let changed = false;
+          data.forEach((row: any) => {
+            const order = normalizeSupabaseOrder(row);
+            const idx = stored.findIndex(e => e.id === order.id);
+            if (idx === -1) {
+              stored.unshift(order);
+              changed = true;
+            } else {
+              stored[idx] = { ...stored[idx], ...order };
+              changed = true;
+            }
+          });
+          if (changed) {
+            saveStoredOrders(stored);
+            notifyOrderListeners();
+          }
+        }
+      });
+
+    // 2. Real-time updates for this driver's orders
+    const channelName = `realtime-driver-${driverId}-${Date.now()}`;
+    channel = client
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'orders',
+          filter: `driver_id=eq.${driverId}`,
+        },
+        (payload) => {
+          const { new: newRecord } = payload as any;
+          if (newRecord) {
+            const order = normalizeSupabaseOrder(newRecord);
+            const stored = getStoredOrders();
+            const idx = stored.findIndex(e => e.id === order.id);
+            if (idx === -1) {
+              stored.unshift(order);
+            } else {
+              stored[idx] = { ...stored[idx], ...order };
+            }
+            saveStoredOrders(stored);
+            notifyOrderListeners();
+          }
+        }
+      )
+      .subscribe();
+  } catch (err) {
+    console.warn('[Supabase Realtime] Driver delivery subscription notice:', err);
+  }
+
   return () => {
     orderListeners.delete(listener);
+    if (channel) {
+      try {
+        const client = getSupabaseClient();
+        client.removeChannel(channel);
+      } catch (e) {}
+    }
   };
 }
 

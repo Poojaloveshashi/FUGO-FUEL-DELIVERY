@@ -46,6 +46,10 @@ export interface Order {
   driver_lng?: number;
   driverLocation?: { lat: number; lng: number };
   status: OrderStatus | string;
+  service_type?: 'FUEL' | 'TRANSPORT' | 'MAINTENANCE' | string;
+  serviceType?: 'FUEL' | 'TRANSPORT' | 'MAINTENANCE' | string;
+  job_kind?: 'VEHICLE_PICKUP' | 'VEHICLE_RETURN' | string;
+  jobKind?: 'VEHICLE_PICKUP' | 'VEHICLE_RETURN' | string;
   fuelType?: string;
   fuel_type?: string;
   amount?: number;
@@ -53,6 +57,10 @@ export interface Order {
   price: number;
   otp?: string;
   delivery_otp?: string;
+  source_app?: string;
+  sourceAppUrl?: string;
+  customer_name?: string;
+  customer_phone?: string;
   createdAt?: any;
   created_at?: any;
   updatedAt?: any;
@@ -65,4 +73,27 @@ export interface SOSAlert {
   location: Location;
   status: 'active' | 'resolved';
   createdAt: any;
+}
+
+export type FulfilmentCategory = 'DELIVERY' | 'MECHANICS' | 'OUTLETS' | 'WAREHOUSE' | 'ALL';
+export type ClientAppType = 'FUEL_APP' | 'REPAIRS_APP' | 'SERVICE_APP';
+
+export interface WarehouseStockItem {
+  id: string;
+  name: string;
+  category: 'fuel' | 'parts';
+  quantity: number;
+  unit: string;
+  minThreshold: number;
+}
+
+export interface OfflineOutlet {
+  id: string;
+  name: string;
+  type: 'pump' | 'garage' | 'hub';
+  address: string;
+  lat: number;
+  lng: number;
+  isOpen: boolean;
+  fuelAvailable: boolean;
 }

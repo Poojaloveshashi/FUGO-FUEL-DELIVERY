@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Wrench, 
@@ -35,6 +35,9 @@ export default function IncomingJobDialog({
   const [isMuted, setIsMuted] = useState(ringtoneManager.getIsMuted());
   const [accepting, setAccepting] = useState(false);
 
+  const onDeclineRef = useRef(onDecline);
+  onDeclineRef.current = onDecline;
+
   useEffect(() => {
     if (!order) {
       ringtoneManager.stopRinging();
@@ -49,22 +52,22 @@ export default function IncomingJobDialog({
     ringtoneManager.startRinging();
 
     const timer = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          ringtoneManager.stopRinging();
-          onDecline(order.id);
-          return 0;
-        }
-        return prev - 1;
-      });
+      setTimeLeft(prev => Math.max(0, prev - 1));
     }, 1000);
 
     return () => {
       clearInterval(timer);
       ringtoneManager.stopRinging();
     };
-  }, [order?.id]);
+  }, [order?.id, timeoutSeconds]);
+
+  // Safely trigger onDecline when countdown finishes, decoupled from render cycle
+  useEffect(() => {
+    if (order && timeLeft === 0) {
+      ringtoneManager.stopRinging();
+      onDeclineRef.current(order.id);
+    }
+  }, [timeLeft, order?.id]);
 
   const handleToggleMute = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -147,11 +150,14 @@ export default function IncomingJobDialog({
                   <Wrench size={24} />
                 </div>
                 <div>
-                  <div className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">
-                    Service Type
+                  <div className="flex items-center gap-1.5 text-[10px] text-gray-400 uppercase font-bold tracking-widest mb-0.5">
+                    <span>{order.service_type === 'TRANSPORT' ? 'Transport Job' : 'Fuel Delivery'}</span>
+                    <span className={`text-[8px] px-1.5 py-0.5 rounded font-mono font-bold ${order.service_type === 'TRANSPORT' ? 'bg-purple-900/80 text-purple-300' : 'bg-emerald-900/80 text-emerald-300'}`}>
+                      {order.service_type || 'FUEL'}
+                    </span>
                   </div>
                   <div className="text-base font-bold text-white uppercase tracking-tight">
-                    {order.fuelType || 'Standard Repair'}
+                    {order.fuelType || (order.service_type === 'TRANSPORT' ? (order.job_kind || 'VEHICLE_PICKUP') : 'Diesel Delivery')}
                   </div>
                 </div>
               </div>
@@ -165,6 +171,22 @@ export default function IncomingJobDialog({
                 </div>
               </div>
             </div>
+
+            {/* Connected Customer App Source Indicator */}
+            {order.source_app && (
+              <div className="flex items-center justify-between px-3.5 py-2 bg-blue-950/70 border border-blue-500/40 rounded-xl text-[11px]">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                  <span className="text-gray-300">Connected Customer:</span>
+                  <span className="font-mono font-bold text-white bg-blue-900/60 px-1.5 py-0.5 rounded text-[10px]">
+                    {order.source_app.slice(0, 8)}
+                  </span>
+                </div>
+                <span className="text-blue-300 text-[10px] font-bold uppercase tracking-wider">
+                  Live Dispatch
+                </span>
+              </div>
+            )}
 
             {/* Location & Navigation Details */}
             <div className="space-y-3 bg-gray-900/50 p-4 rounded-2xl border border-gray-800/80">
